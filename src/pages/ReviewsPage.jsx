@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useSubscriptions, useReviews } from '../hooks/useSubscriptions';
+import { useSubscriptions } from '../hooks/useSubscriptions';
+import { useReviews } from '../hooks/useReviews';
 import ReviewModal from '../components/ReviewModal';
 
 function ReviewsPage() {

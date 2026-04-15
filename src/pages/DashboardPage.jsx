@@ -1,4 +1,5 @@
-import { useSubscriptions, useReviews } from '../hooks/useSubscriptions';
+import { useSubscriptions } from '../hooks/useSubscriptions';
+import { useReviews } from '../hooks/useReviews';
 import { useNotifications } from '../hooks/useNotifications';
 import { format, addDays, isBefore } from 'date-fns';
 
