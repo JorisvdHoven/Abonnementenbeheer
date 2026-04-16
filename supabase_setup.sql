@@ -3,9 +3,18 @@
 
 -- Subscriptions table
 CREATE TABLE subscriptions (
+    document_name text,
+    document_url text,
+    document_path text,
+    document_type text,
+    document_content text,
+    document_uploaded_at timestamptz DEFAULT now(),
   id uuid primary key default gen_random_uuid(),
   name text not null,
   vendor text,
+  contact_name text,
+  contact_email text,
+  contact_phone text,
   category text,
   type text,
   cost numeric,
@@ -20,6 +29,19 @@ CREATE TABLE subscriptions (
   notes text,
   created_at timestamptz default now(),
   created_by uuid references auth.users
+);
+
+-- Category and type settings tables
+CREATE TABLE subscription_categories (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  created_at timestamptz default now()
+);
+
+CREATE TABLE subscription_types (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  created_at timestamptz default now()
 );
 
 -- Reviews table

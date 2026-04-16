@@ -4,5 +4,32 @@
 
 body {
   font-family: 'DM Sans', sans-serif;
-  background-color: #ffffff;
+  background: linear-gradient(180deg, #f4f7fb 0%, #e9eef5 100%);
+  color: #0f172a;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+@layer components {
+  .surface-card {
+    @apply bg-white rounded-xl border border-slate-200 shadow-md;
+  }
+
+  .surface-card-strong {
+    @apply bg-white rounded-xl border border-slate-300 shadow-lg;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 font-semibold text-white shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-700 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary hover:bg-orange-50 hover:text-primary hover:shadow-lg;
+  }
+
+  .field-strong {
+    @apply border-slate-300 bg-white text-slate-800 shadow-sm focus:border-primary focus:ring-primary;
+  }
 }

@@ -20,8 +20,8 @@ function ReviewModal({ subscription, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-lg max-w-md w-full mx-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60">
+      <div className="surface-card-strong max-w-md w-full mx-4">
         <div className="p-6">
           <h2 className="text-xl font-bold mb-4">Review {subscription.name}</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -59,7 +59,7 @@ function ReviewModal({ subscription, onSave, onClose }) {
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 rows={4}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                className="field-strong w-full px-3 py-2 rounded-md focus:outline-none"
                 placeholder="Deel je ervaringen..."
               />
             </div>
@@ -67,14 +67,14 @@ function ReviewModal({ subscription, onSave, onClose }) {
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                className="btn-secondary"
               >
                 Annuleren
               </button>
               <button
                 type="submit"
                 disabled={rating === 0}
-                className="px-4 py-2 bg-primary text-white rounded-md hover:opacity-90 disabled:opacity-50"
+                className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Opslaan
               </button>

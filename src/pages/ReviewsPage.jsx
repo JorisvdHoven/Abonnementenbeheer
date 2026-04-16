@@ -31,8 +31,11 @@ function ReviewsPage() {
   }
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold text-dark mb-6">Reviews</h1>
+    <div className="p-6 space-y-6">
+      <div className="surface-card-strong p-5">
+        <h1 className="text-2xl font-bold text-dark">Reviews</h1>
+        <p className="mt-1 text-sm text-slate-600">Klik op een kaart om direct een beoordeling toe te voegen.</p>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {subscriptions.map(sub => {
@@ -42,7 +45,7 @@ function ReviewsPage() {
           return (
             <div
               key={sub.id}
-              className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 cursor-pointer hover:shadow-md transition-shadow"
+              className="surface-card-strong cursor-pointer p-4 transition-all duration-200 hover:-translate-y-1 hover:border-orange-300 hover:shadow-xl"
               onClick={() => handleReview(sub)}
             >
               <h3 className="font-semibold text-lg mb-2">{sub.name}</h3>

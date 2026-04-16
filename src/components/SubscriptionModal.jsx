@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
-function SubscriptionModal({ subscription, onSave, onClose }) {
+function SubscriptionModal({ subscription, typeOptions = [], onSave, onClose }) {
   const [formData, setFormData] = useState({
     name: '',
     vendor: '',
+    contact_name: '',
+    contact_email: '',
+    contact_phone: '',
     category: '',
     type: '',
     cost: '',
@@ -16,16 +19,35 @@ function SubscriptionModal({ subscription, onSave, onClose }) {
     status: 'actief',
     auto_renew: false,
     terms: '',
-    notes: ''
+    notes: '',
+    document_name: '',
+    document_type: '',
+    document_content: ''
   });
 
   useEffect(() => {
     if (subscription) {
       setFormData({
-        ...subscription,
+        name: subscription.name || '',
+        vendor: subscription.vendor || '',
+        contact_name: subscription.contact_name || '',
+        contact_email: subscription.contact_email || '',
+        contact_phone: subscription.contact_phone || '',
+        category: subscription.category || '',
+        type: subscription.type || '',
+        cost: subscription.cost ?? '',
+        cost_period: subscription.cost_period || '',
+        seats: subscription.seats || 1,
         start_date: subscription.start_date ? subscription.start_date.split('T')[0] : '',
         end_date: subscription.end_date ? subscription.end_date.split('T')[0] : '',
-        renewal_date: subscription.renewal_date ? subscription.renewal_date.split('T')[0] : ''
+        renewal_date: subscription.renewal_date ? subscription.renewal_date.split('T')[0] : '',
+        status: subscription.status || 'actief',
+        auto_renew: subscription.auto_renew || false,
+        terms: subscription.terms || '',
+        notes: subscription.notes || '',
+        document_name: subscription.document_name || '',
+        document_type: subscription.document_type || '',
+        document_content: subscription.document_content || ''
       });
     }
   }, [subscription]);
@@ -38,6 +60,46 @@ function SubscriptionModal({ subscription, onSave, onClose }) {
     }));
   };
 
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+
+    if (!file) {
+      setFormData(prev => ({
+        ...prev,
+        document_name: '',
+        document_type: '',
+        document_content: ''
+      }));
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Kies een document kleiner dan 5 MB.');
+      e.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setFormData(prev => ({
+        ...prev,
+        document_name: file.name,
+        document_type: file.type || 'application/octet-stream',
+        document_content: typeof reader.result === 'string' ? reader.result : ''
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveDocument = () => {
+    setFormData(prev => ({
+      ...prev,
+      document_name: '',
+      document_type: '',
+      document_content: ''
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     const { data: { user } } = await supabase.auth.getUser();
@@ -45,14 +107,14 @@ function SubscriptionModal({ subscription, onSave, onClose }) {
       ...formData,
       cost: parseFloat(formData.cost) || 0,
       seats: parseInt(formData.seats) || 1,
-      created_by: user.id
+      created_by: user?.id
     };
     await onSave(dataToSave);
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60">
+      <div className="surface-card-strong max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <h2 className="text-xl font-bold mb-4">{subscription ? 'Bewerk abonnement' : 'Nieuw abonnement'}</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -79,6 +141,36 @@ function SubscriptionModal({ subscription, onSave, onClose }) {
                 />
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-700">Contactpersoon</label>
+                <input
+                  type="text"
+                  name="contact_name"
+                  value={formData.contact_name}
+                  onChange={handleChange}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">E-mail contact</label>
+                <input
+                  type="email"
+                  name="contact_email"
+                  value={formData.contact_email}
+                  onChange={handleChange}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Telefoon contact</label>
+                <input
+                  type="tel"
+                  name="contact_phone"
+                  value={formData.contact_phone}
+                  onChange={handleChange}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                />
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700">Categorie</label>
                 <input
                   type="text"
@@ -90,13 +182,27 @@ function SubscriptionModal({ subscription, onSave, onClose }) {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Type</label>
-                <input
-                  type="text"
-                  name="type"
-                  value={formData.type}
-                  onChange={handleChange}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                />
+                {typeOptions.length > 0 ? (
+                  <select
+                    name="type"
+                    value={formData.type}
+                    onChange={handleChange}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                  >
+                    <option value="">Kies een type</option>
+                    {typeOptions.map((typeOption) => (
+                      <option key={typeOption} value={typeOption}>{typeOption}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    name="type"
+                    value={formData.type}
+                    onChange={handleChange}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                  />
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Kosten</label>
@@ -195,6 +301,42 @@ function SubscriptionModal({ subscription, onSave, onClose }) {
               />
             </div>
             <div>
+              <label className="block text-sm font-medium text-gray-700">Document</label>
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt"
+                onChange={handleFileChange}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+              />
+              <p className="mt-1 text-xs text-gray-500">Ondersteunt onder andere PDF, Word, afbeeldingen en tekstbestanden tot 5 MB.</p>
+              {formData.document_name && (
+                <div className="mt-2 flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm">
+                  <div>
+                    <div className="font-medium text-slate-700">Geselecteerd document</div>
+                    <div className="text-slate-500">{formData.document_name}</div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {formData.document_content && (
+                      <a
+                        href={formData.document_content}
+                        download={formData.document_name}
+                        className="text-primary hover:underline"
+                      >
+                        Open
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleRemoveDocument}
+                      className="text-red-600 hover:underline"
+                    >
+                      Verwijder document
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div>
               <label className="block text-sm font-medium text-gray-700">Notities</label>
               <textarea
                 name="notes"
@@ -208,13 +350,13 @@ function SubscriptionModal({ subscription, onSave, onClose }) {
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                className="btn-secondary"
               >
                 Annuleren
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 bg-primary text-white rounded-md hover:opacity-90"
+                className="btn-primary"
               >
                 Opslaan
               </button>

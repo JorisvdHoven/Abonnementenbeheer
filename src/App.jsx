@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import SubscriptionsPage from './pages/SubscriptionsPage';
 import ReviewsPage from './pages/ReviewsPage';
+import SettingsPage from './pages/SettingsPage';
 import Navbar from './components/Navbar';
 
 function App() {
@@ -36,15 +37,18 @@ function App() {
   return (
     <Router>
       {user ? (
-        <>
+        <div className="min-h-screen bg-transparent">
           <Navbar user={user} />
-          <Routes>
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/subscriptions" element={<SubscriptionsPage />} />
-            <Route path="/reviews" element={<ReviewsPage />} />
-            <Route path="*" element={<Navigate to="/dashboard" />} />
-          </Routes>
-        </>
+          <main className="max-w-7xl mx-auto w-full">
+            <Routes>
+              <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/subscriptions" element={<SubscriptionsPage />} />
+              <Route path="/reviews" element={<ReviewsPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="*" element={<Navigate to="/dashboard" />} />
+            </Routes>
+          </main>
+        </div>
       ) : (
         <Routes>
           <Route path="/login" element={<LoginPage />} />

@@ -34,30 +34,31 @@ function DashboardPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold text-dark">Dashboard</h1>
+      <div className="surface-card-strong p-5">
+        <h1 className="text-2xl font-bold text-dark">Dashboard</h1>
+        <p className="mt-1 text-sm text-slate-600">Meer overzicht met duidelijkere vakken en sterkere kleuraccenten.</p>
+      </div>
 
-      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <div className="text-sm text-gray-500">Actieve abonnementen</div>
+        <div className="surface-card-strong p-4 hover:shadow-xl transition-all duration-200">
+          <div className="text-sm font-medium text-slate-500">Actieve abonnementen</div>
           <div className="text-2xl font-bold text-dark">{activeSubs.length}</div>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <div className="text-sm text-gray-500">Maandkosten</div>
+        <div className="surface-card-strong p-4 hover:shadow-xl transition-all duration-200">
+          <div className="text-sm font-medium text-slate-500">Maandkosten</div>
           <div className="text-2xl font-bold text-dark">€{totalMonthlyCost.toFixed(2)}</div>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <div className="text-sm text-gray-500">Verloopt binnenkort</div>
+        <div className="surface-card-strong p-4 hover:shadow-xl transition-all duration-200">
+          <div className="text-sm font-medium text-slate-500">Verloopt binnenkort</div>
           <div className="text-2xl font-bold text-dark">{expiringSoon}</div>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <div className="text-sm text-gray-500">Reviews</div>
+        <div className="surface-card-strong p-4 hover:shadow-xl transition-all duration-200">
+          <div className="text-sm font-medium text-slate-500">Reviews</div>
           <div className="text-2xl font-bold text-dark">{reviewPercentage}%</div>
         </div>
       </div>
 
-      {/* Expiring Subscriptions Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+      <div className="surface-card-strong p-4">
         <h2 className="text-lg font-semibold mb-4">Verloopt binnen 60 dagen</h2>
         <table className="w-full text-sm">
           <thead>
@@ -96,7 +97,7 @@ function DashboardPage() {
       </div>
 
       {/* Cost per Category Chart */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+      <div className="surface-card-strong p-4">
         <h2 className="text-lg font-semibold mb-4">Kosten per categorie</h2>
         <div className="space-y-2">
           {Object.entries(categoryCosts).map(([cat, cost]) => (
@@ -115,7 +116,7 @@ function DashboardPage() {
       </div>
 
       {/* Review Progress */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+      <div className="surface-card-strong p-4">
         <h2 className="text-lg font-semibold mb-4">Review voortgang</h2>
         <div className="w-full bg-gray-200 rounded-full h-4">
           <div
