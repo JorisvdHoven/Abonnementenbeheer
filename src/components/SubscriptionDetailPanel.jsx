@@ -81,12 +81,12 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
           </Section>
 
           <Section title="Kosten">
-            <DetailRow label="Kosten" value={`${sub.currency === 'USD' ? '$' : '€'}${sub.cost}${sub.cost_period ? ` (${sub.cost_period})` : ''}`} />
+            <DetailRow label="Kosten" value={`${sub.currency === 'USD' ? '$' : '€'}${sub.cost}${sub.cost_period ? ` (${sub.cost_period})` : ''}${sub.cost_per_seat ? ` × ${sub.seats || 1} seats` : ''}`} />
             {monthly !== null && sub.cost_period !== 'Maandelijks' && (
-              <DetailRow label="Per maand" value={`€${monthly.toFixed(2)}`} />
+              <DetailRow label="Per maand" value={`€${(monthly * (sub.cost_per_seat ? (sub.seats || 1) : 1)).toFixed(2)}`} />
             )}
             {monthly !== null && (
-              <DetailRow label="Per jaar" value={`€${(monthly * 12).toFixed(2)}`} />
+              <DetailRow label="Per jaar" value={`€${(monthly * (sub.cost_per_seat ? (sub.seats || 1) : 1) * 12).toFixed(2)}`} />
             )}
           </Section>
 
