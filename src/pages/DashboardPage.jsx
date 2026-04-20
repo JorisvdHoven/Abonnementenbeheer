@@ -17,7 +17,7 @@ import {
   CalendarDaysIcon,
 } from '@heroicons/react/24/outline';
 
-function LineChart({ data, currentMonth, months, snapshots, currentYear }) {
+function LineChart({ data, currentMonth, months, snapshots, currentYear, globalMax }) {
   const [tooltip, setTooltip] = useState(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const [dims, setDims] = useState({ w: 600, h: 200 });
@@ -37,7 +37,7 @@ function LineChart({ data, currentMonth, months, snapshots, currentYear }) {
   const padL = 48, padR = 16, padT = 16, padB = 30;
   const innerW = W - padL - padR;
   const innerH = H - padT - padB;
-  const max = Math.max(...data, 1);
+  const max = globalMax ?? Math.max(...data, 1);
 
   const x = (i) => padL + (i / 11) * innerW;
   const y = (v) => padT + innerH - (v / max) * innerH;
@@ -165,7 +165,7 @@ function DashboardPage() {
     setModalOpen(false);
   };
 
-  const toEurMonthly = (sub) => toMonthly(sub.cost || 0, sub.cost_period) * (sub.currency === 'USD' ? exchangeRate : 1);
+  const toEurMonthly = (sub) => toMonthly(sub.cost || 0, sub.cost_period) * (sub.cost_per_seat ? (sub.seats || 1) : 1) * (sub.currency === 'USD' ? exchangeRate : 1);
 
   const isActiveInMonth = (sub, year, month) => {
     const monthStart = new Date(year, month, 1);
@@ -233,6 +233,13 @@ function DashboardPage() {
     }
     return 0;
   });
+
+  const globalMax = Math.max(
+    ...snapshots.map(s => s.total_cost),
+    ...selectedCashflow,
+    ...monthlyCashflow,
+    1
+  );
 
   const CATEGORY_PERIODS = [
     { key: 'maand',    label: 'Maand',    factor: 1 },
@@ -423,7 +430,7 @@ function DashboardPage() {
             <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 bg-primary/40 rounded" />Prognose</span>
           </div>
         </div>
-        <LineChart data={selectedCashflow} currentMonth={selectedYear === currentYear ? currentMonth : (selectedYear < currentYear ? 11 : -1)} months={MONTHS} snapshots={snapshots} currentYear={selectedYear} />
+        <LineChart data={selectedCashflow} currentMonth={selectedYear === currentYear ? currentMonth : (selectedYear < currentYear ? 11 : -1)} months={MONTHS} snapshots={snapshots} currentYear={selectedYear} globalMax={globalMax} />
       </div>
 
       {detailSub && (

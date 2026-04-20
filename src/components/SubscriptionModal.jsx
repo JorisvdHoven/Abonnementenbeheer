@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabaseClient';
 import { BILLING_PERIODS, toMonthly } from '../lib/costUtils';
 import { SubLogo } from './SubLogo';
 
-function AddableSelect({ label, value, options, onChange, onAdd, error, required }) {
+function AddableSelect({ label, value, options, onChange, onAdd, error, required, tooltip }) {
   const [adding, setAdding] = useState(false);
   const [newValue, setNewValue] = useState('');
 
@@ -26,9 +26,19 @@ function AddableSelect({ label, value, options, onChange, onAdd, error, required
 
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700">
-        {label}{required && <span className={`ml-0.5 ${value ? 'text-gray-900' : 'text-red-500'}`}>*</span>}
-      </label>
+      <div className="flex items-center gap-1.5">
+        <label className="text-sm font-medium text-gray-700">
+          {label}{required && <span className={`ml-0.5 ${value ? 'text-gray-900' : 'text-red-500'}`}>*</span>}
+        </label>
+        {tooltip && (
+          <div className="relative group mb-0.5">
+            <span className="flex items-center justify-center w-4 h-4 rounded-full bg-slate-300 text-white text-xs font-bold cursor-default select-none">i</span>
+            <span className="absolute left-6 top-1/2 -translate-y-1/2 z-10 hidden group-hover:block w-64 rounded-md bg-slate-800 text-white text-xs p-3 shadow-lg font-normal">
+              {tooltip}
+            </span>
+          </div>
+        )}
+      </div>
       {adding ? (
         <div className="mt-1 flex gap-2">
           <input
@@ -73,6 +83,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
     currency: 'EUR',
     cost_period: '',
     seats: 1,
+    cost_per_seat: false,
     start_date: '',
     end_date: '',
     renewal_date: '',
@@ -99,6 +110,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
         currency: subscription.currency || 'EUR',
         cost_period: subscription.cost_period || '',
         seats: subscription.seats || 1,
+        cost_per_seat: subscription.cost_per_seat || false,
         start_date: subscription.start_date ? subscription.start_date.split('T')[0] : '',
         end_date: subscription.end_date ? subscription.end_date.split('T')[0] : '',
         renewal_date: subscription.renewal_date ? subscription.renewal_date.split('T')[0] : '',
@@ -304,6 +316,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
                 onAdd={onAddCategory}
                 error={fieldErrors.category}
                 required
+                tooltip="Categorie geeft aan tot welk bedrijfsonderdeel of kostenpost een abonnement behoort. Voorbeelden: Software, Hardware, Marketing, HR."
               />
               <AddableSelect
                 label="Type"
@@ -313,6 +326,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
                 onAdd={onAddType}
                 error={fieldErrors.type}
                 required
+                tooltip="Type geeft aan op welke manier een abonnement wordt afgerekend. Voorbeelden: Licentie, Abonnement, Pay-per-use, Eenmalig."
               />
               <div>
                 <label className="block text-sm font-medium text-gray-700">Kosten</label>
@@ -352,7 +366,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
                 </select>
                 {formData.cost_period && formData.cost_period !== 'Maandelijks' && formData.cost_period !== 'Eenmalig' && formData.cost !== '' && (
                   <p className="mt-1 text-xs text-slate-500">
-                    ≈ {formData.currency === 'USD' ? '$' : '€'}{toMonthly(parseFloat(formData.cost), formData.cost_period).toFixed(2)} per maand
+                    ≈ {formData.currency === 'USD' ? '$' : '€'}{(toMonthly(parseFloat(formData.cost), formData.cost_period) * (formData.cost_per_seat ? (parseInt(formData.seats) || 1) : 1)).toFixed(2)} per maand{formData.cost_per_seat && parseInt(formData.seats) > 1 ? ` (${formData.seats} seats)` : ''}
                   </p>
                 )}
               </div>
@@ -366,6 +380,23 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
                   className={`mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-primary focus:border-primary ${fieldErrors.seats ? 'border-red-400' : 'border-gray-300'}`}
                 />
                 {fieldErrors.seats && <p className="mt-1 text-xs text-red-600">{fieldErrors.seats}</p>}
+                <div className="mt-2 flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="cost_per_seat"
+                    name="cost_per_seat"
+                    checked={formData.cost_per_seat}
+                    onChange={handleChange}
+                    className="rounded border-gray-300 text-primary focus:ring-primary"
+                  />
+                  <label htmlFor="cost_per_seat" className="text-sm text-gray-600">Prijs per seat</label>
+                  <div className="relative group">
+                    <span className="flex items-center justify-center w-4 h-4 rounded-full bg-slate-300 text-white text-xs font-bold cursor-default select-none">i</span>
+                    <span className="absolute right-0 bottom-6 z-10 hidden group-hover:block w-72 rounded-md bg-slate-800 text-white text-xs p-3 shadow-lg font-normal">
+                      Als ingeschakeld wordt de kosten vermenigvuldigd met het aantal seats. Handig als je per gebruiker betaalt, bijv. €10 × 5 seats = €50 per maand.
+                    </span>
+                  </div>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Status</label>
