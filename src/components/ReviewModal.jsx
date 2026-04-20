@@ -1,10 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
-function ReviewModal({ subscription, onSave, onClose }) {
-  const [rating, setRating] = useState(0);
-  const [usagePct, setUsagePct] = useState(50);
-  const [note, setNote] = useState('');
+function ReviewModal({ subscription, existingReview, onSave, onClose }) {
+  const [rating, setRating] = useState(existingReview?.rating ?? 0);
+
+  useEffect(() => {
+    const handleKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+  const [usagePct, setUsagePct] = useState(existingReview?.usage_pct ?? 50);
+  const [note, setNote] = useState(existingReview?.note ?? '');
+
+  const isEditing = !!existingReview;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -16,14 +24,15 @@ function ReviewModal({ subscription, onSave, onClose }) {
       usage_pct: usagePct,
       note
     };
-    await onSave(reviewData);
+    await onSave(reviewData, existingReview?.id);
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60">
       <div className="surface-card-strong max-w-md w-full mx-4">
         <div className="p-6">
-          <h2 className="text-xl font-bold mb-4">Review {subscription.name}</h2>
+          <h2 className="text-xl font-bold mb-1">{isEditing ? 'Beoordeling bewerken' : 'Review toevoegen'}</h2>
+          <p className="text-sm text-slate-500 mb-4">{subscription.name}</p>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Sterrenscore</label>
@@ -64,19 +73,13 @@ function ReviewModal({ subscription, onSave, onClose }) {
               />
             </div>
             <div className="flex justify-end space-x-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="btn-secondary"
-              >
-                Annuleren
-              </button>
+              <button type="button" onClick={onClose} className="btn-secondary">Annuleren</button>
               <button
                 type="submit"
                 disabled={rating === 0}
                 className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Opslaan
+                {isEditing ? 'Opslaan' : 'Toevoegen'}
               </button>
             </div>
           </form>

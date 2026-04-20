@@ -4,13 +4,16 @@ import { supabase } from './lib/supabaseClient';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import SubscriptionsPage from './pages/SubscriptionsPage';
-import ReviewsPage from './pages/ReviewsPage';
+import EvaluatiePage from './pages/EvaluatiePage';
 import SettingsPage from './pages/SettingsPage';
+import GebruikersBeheerPage from './pages/GebruikersBeheerPage';
 import Navbar from './components/Navbar';
+import { useDailySnapshot } from './hooks/useDailySnapshot';
 
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  useDailySnapshot();
 
   useEffect(() => {
     // Check initial session
@@ -43,8 +46,9 @@ function App() {
             <Routes>
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/subscriptions" element={<SubscriptionsPage />} />
-              <Route path="/reviews" element={<ReviewsPage />} />
+              <Route path="/evaluatie" element={<EvaluatiePage />} />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/gebruikers" element={<GebruikersBeheerPage />} />
               <Route path="*" element={<Navigate to="/dashboard" />} />
             </Routes>
           </main>

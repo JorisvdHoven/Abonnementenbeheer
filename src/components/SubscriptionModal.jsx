@@ -1,7 +1,66 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { BILLING_PERIODS, toMonthly } from '../lib/costUtils';
+import { SubLogo } from './SubLogo';
 
-function SubscriptionModal({ subscription, typeOptions = [], onSave, onClose }) {
+function AddableSelect({ label, value, options, onChange, onAdd, error, required }) {
+  const [adding, setAdding] = useState(false);
+  const [newValue, setNewValue] = useState('');
+
+  const handleSelect = (e) => {
+    if (e.target.value === '__new__') {
+      setAdding(true);
+    } else {
+      onChange(e.target.value);
+    }
+  };
+
+  const handleConfirm = async () => {
+    const trimmed = newValue.trim();
+    if (!trimmed) return;
+    await onAdd(trimmed);
+    onChange(trimmed);
+    setNewValue('');
+    setAdding(false);
+  };
+
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700">
+        {label}{required && <span className={`ml-0.5 ${value ? 'text-gray-900' : 'text-red-500'}`}>*</span>}
+      </label>
+      {adding ? (
+        <div className="mt-1 flex gap-2">
+          <input
+            type="text"
+            value={newValue}
+            onChange={(e) => setNewValue(e.target.value)}
+            placeholder={`Nieuwe ${label.toLowerCase()}...`}
+            autoFocus
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleConfirm(); } }}
+            className="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-primary focus:border-primary"
+          />
+          <button type="button" onClick={handleConfirm} className="btn-primary whitespace-nowrap">Toevoegen</button>
+          <button type="button" onClick={() => { setAdding(false); setNewValue(''); }} className="btn-secondary">✕</button>
+        </div>
+      ) : (
+        <select
+          value={value}
+          onChange={handleSelect}
+          className={`mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-primary focus:border-primary ${error ? 'border-red-400' : 'border-gray-300'}`}
+        >
+          <option value="">Kies een {label.toLowerCase()}</option>
+          {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+          <option disabled>──────────</option>
+          <option value="__new__">+ Nieuwe {label.toLowerCase()} toevoegen</option>
+        </select>
+      )}
+      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+    </div>
+  );
+}
+
+function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [], onAddCategory, onAddType, onSave, onClose, saveError }) {
   const [formData, setFormData] = useState({
     name: '',
     vendor: '',
@@ -11,6 +70,7 @@ function SubscriptionModal({ subscription, typeOptions = [], onSave, onClose }) 
     category: '',
     type: '',
     cost: '',
+    currency: 'EUR',
     cost_period: '',
     seats: 1,
     start_date: '',
@@ -36,6 +96,7 @@ function SubscriptionModal({ subscription, typeOptions = [], onSave, onClose }) 
         category: subscription.category || '',
         type: subscription.type || '',
         cost: subscription.cost ?? '',
+        currency: subscription.currency || 'EUR',
         cost_period: subscription.cost_period || '',
         seats: subscription.seats || 1,
         start_date: subscription.start_date ? subscription.start_date.split('T')[0] : '',
@@ -100,13 +161,67 @@ function SubscriptionModal({ subscription, typeOptions = [], onSave, onClose }) 
     }));
   };
 
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [debouncedName, setDebouncedName] = useState(formData.name);
+  const [debouncedVendor, setDebouncedVendor] = useState(formData.vendor);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedName(formData.name), 1000);
+    return () => clearTimeout(t);
+  }, [formData.name]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedVendor(formData.vendor), 1000);
+    return () => clearTimeout(t);
+  }, [formData.vendor]);
+
+  useEffect(() => {
+    const handleKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+
+  const validate = () => {
+    const errors = {};
+    if (!formData.name.trim())
+      errors.name = 'Naam is verplicht.';
+    if (!formData.category)
+      errors.category = 'Categorie is verplicht.';
+    if (!formData.type)
+      errors.type = 'Type is verplicht.';
+    if (formData.contact_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.contact_email))
+      errors.contact_email = 'Voer een geldig e-mailadres in.';
+    if (formData.cost !== '' && (isNaN(parseFloat(formData.cost)) || parseFloat(formData.cost) < 0))
+      errors.cost = 'Voer een geldig bedrag in (bijv. 9.99).';
+    if (formData.seats !== '' && (isNaN(parseInt(formData.seats)) || parseInt(formData.seats) < 1))
+      errors.seats = 'Aantal seats moet minimaal 1 zijn.';
+    if (formData.start_date && isNaN(Date.parse(formData.start_date)))
+      errors.start_date = 'Datum niet juist ingevoerd.';
+    if (formData.end_date && isNaN(Date.parse(formData.end_date)))
+      errors.end_date = 'Datum niet juist ingevoerd.';
+    if (formData.end_date && formData.start_date && new Date(formData.end_date) < new Date(formData.start_date))
+      errors.end_date = 'Einddatum mag niet vóór de startdatum liggen.';
+    if (formData.renewal_date && isNaN(Date.parse(formData.renewal_date)))
+      errors.renewal_date = 'Datum niet juist ingevoerd.';
+    return errors;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const errors = validate();
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
+    setFieldErrors({});
     const { data: { user } } = await supabase.auth.getUser();
     const dataToSave = {
       ...formData,
       cost: parseFloat(formData.cost) || 0,
       seats: parseInt(formData.seats) || 1,
+      start_date: formData.start_date || null,
+      end_date: formData.end_date || null,
+      renewal_date: formData.renewal_date || null,
       created_by: user?.id
     };
     await onSave(dataToSave);
@@ -116,19 +231,29 @@ function SubscriptionModal({ subscription, typeOptions = [], onSave, onClose }) 
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60">
       <div className="surface-card-strong max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="p-6">
-          <h2 className="text-xl font-bold mb-4">{subscription ? 'Bewerk abonnement' : 'Nieuw abonnement'}</h2>
+          <div className="flex items-center gap-4 mb-5">
+            {(debouncedVendor || debouncedName) && (
+              <SubLogo vendor={debouncedVendor} name={debouncedName} size="xl" />
+            )}
+            <div>
+              <h2 className="text-xl font-bold">{subscription ? 'Bewerk abonnement' : 'Nieuw abonnement'}</h2>
+              {(formData.name || formData.vendor) && (
+                <p className="text-sm text-slate-400 mt-0.5">{formData.vendor || formData.name}</p>
+              )}
+            </div>
+          </div>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Naam</label>
+                <label className="block text-sm font-medium text-gray-700">Naam <span className={formData.name.trim() ? 'text-gray-900' : 'text-red-500'}>*</span></label>
                 <input
                   type="text"
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
-                  required
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                  className={`mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-primary focus:border-primary ${fieldErrors.name ? 'border-red-400' : 'border-gray-300'}`}
                 />
+                {fieldErrors.name && <p className="mt-1 text-xs text-red-600">{fieldErrors.name}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Leverancier</label>
@@ -153,12 +278,13 @@ function SubscriptionModal({ subscription, typeOptions = [], onSave, onClose }) 
               <div>
                 <label className="block text-sm font-medium text-gray-700">E-mail contact</label>
                 <input
-                  type="email"
+                  type="text"
                   name="contact_email"
                   value={formData.contact_email}
                   onChange={handleChange}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                  className={`mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-primary focus:border-primary ${fieldErrors.contact_email ? 'border-red-400' : 'border-gray-300'}`}
                 />
+                {fieldErrors.contact_email && <p className="mt-1 text-xs text-red-600">{fieldErrors.contact_email}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Telefoon contact</label>
@@ -170,61 +296,65 @@ function SubscriptionModal({ subscription, typeOptions = [], onSave, onClose }) 
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Categorie</label>
-                <input
-                  type="text"
-                  name="category"
-                  value={formData.category}
-                  onChange={handleChange}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Type</label>
-                {typeOptions.length > 0 ? (
-                  <select
-                    name="type"
-                    value={formData.type}
-                    onChange={handleChange}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                  >
-                    <option value="">Kies een type</option>
-                    {typeOptions.map((typeOption) => (
-                      <option key={typeOption} value={typeOption}>{typeOption}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    name="type"
-                    value={formData.type}
-                    onChange={handleChange}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                  />
-                )}
-              </div>
+              <AddableSelect
+                label="Categorie"
+                value={formData.category}
+                options={categoryOptions}
+                onChange={(val) => setFormData(prev => ({ ...prev, category: val }))}
+                onAdd={onAddCategory}
+                error={fieldErrors.category}
+                required
+              />
+              <AddableSelect
+                label="Type"
+                value={formData.type}
+                options={typeOptions}
+                onChange={(val) => setFormData(prev => ({ ...prev, type: val }))}
+                onAdd={onAddType}
+                error={fieldErrors.type}
+                required
+              />
               <div>
                 <label className="block text-sm font-medium text-gray-700">Kosten</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  name="cost"
-                  value={formData.cost}
-                  onChange={handleChange}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                />
+                <div className="mt-1 flex">
+                  <select
+                    name="currency"
+                    value={formData.currency}
+                    onChange={handleChange}
+                    className="px-2 py-2 border border-r-0 border-gray-300 rounded-l-md bg-gray-50 text-sm focus:outline-none focus:ring-primary focus:border-primary"
+                  >
+                    <option value="EUR">€ EUR</option>
+                    <option value="USD">$ USD</option>
+                  </select>
+                  <input
+                    type="number"
+                    step="0.01"
+                    name="cost"
+                    value={formData.cost}
+                    onChange={handleChange}
+                    className={`block w-full px-3 py-2 border rounded-r-md focus:outline-none focus:ring-primary focus:border-primary ${fieldErrors.cost ? 'border-red-400' : 'border-gray-300'}`}
+                  />
+                </div>
+                {fieldErrors.cost && <p className="mt-1 text-xs text-red-600">{fieldErrors.cost}</p>}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Kostperiode</label>
-                <input
-                  type="text"
+                <label className="block text-sm font-medium text-gray-700">Facturatieperiode</label>
+                <select
                   name="cost_period"
                   value={formData.cost_period}
                   onChange={handleChange}
-                  placeholder="per gebruiker/maand"
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                />
+                >
+                  <option value="">Kies een periode</option>
+                  {BILLING_PERIODS.map(p => (
+                    <option key={p.value} value={p.value}>{p.label}</option>
+                  ))}
+                </select>
+                {formData.cost_period && formData.cost_period !== 'Maandelijks' && formData.cost_period !== 'Eenmalig' && formData.cost !== '' && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    ≈ {formData.currency === 'USD' ? '$' : '€'}{toMonthly(parseFloat(formData.cost), formData.cost_period).toFixed(2)} per maand
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Seats</label>
@@ -233,8 +363,9 @@ function SubscriptionModal({ subscription, typeOptions = [], onSave, onClose }) 
                   name="seats"
                   value={formData.seats}
                   onChange={handleChange}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                  className={`mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-primary focus:border-primary ${fieldErrors.seats ? 'border-red-400' : 'border-gray-300'}`}
                 />
+                {fieldErrors.seats && <p className="mt-1 text-xs text-red-600">{fieldErrors.seats}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Status</label>
@@ -256,8 +387,11 @@ function SubscriptionModal({ subscription, typeOptions = [], onSave, onClose }) 
                   name="start_date"
                   value={formData.start_date}
                   onChange={handleChange}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                  className={`mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-primary focus:border-primary ${fieldErrors.start_date ? 'border-red-400' : 'border-gray-300'}`}
                 />
+                {fieldErrors.start_date
+                  ? <p className="mt-1 text-xs text-red-600">{fieldErrors.start_date}</p>
+                  : <p className="mt-1 text-xs text-gray-400">Mag leeg gelaten worden.</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Einddatum</label>
@@ -266,8 +400,11 @@ function SubscriptionModal({ subscription, typeOptions = [], onSave, onClose }) 
                   name="end_date"
                   value={formData.end_date}
                   onChange={handleChange}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                  className={`mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-primary focus:border-primary ${fieldErrors.end_date ? 'border-red-400' : 'border-gray-300'}`}
                 />
+                {fieldErrors.end_date
+                  ? <p className="mt-1 text-xs text-red-600">{fieldErrors.end_date}</p>
+                  : <p className="mt-1 text-xs text-gray-400">Laat leeg als er geen vaste einddatum is.</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Verlengingsdatum</label>
@@ -276,8 +413,11 @@ function SubscriptionModal({ subscription, typeOptions = [], onSave, onClose }) 
                   name="renewal_date"
                   value={formData.renewal_date}
                   onChange={handleChange}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                  className={`mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-primary focus:border-primary ${fieldErrors.renewal_date ? 'border-red-400' : 'border-gray-300'}`}
                 />
+                {fieldErrors.renewal_date
+                  ? <p className="mt-1 text-xs text-red-600">{fieldErrors.renewal_date}</p>
+                  : <p className="mt-1 text-xs text-gray-400">Wordt gebruikt voor verloopmeldingen op het dashboard.</p>}
               </div>
               <div className="flex items-center">
                 <input
@@ -346,6 +486,11 @@ function SubscriptionModal({ subscription, typeOptions = [], onSave, onClose }) 
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
               />
             </div>
+            {saveError && (
+              <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+                {saveError}
+              </div>
+            )}
             <div className="flex justify-end space-x-3">
               <button
                 type="button"
