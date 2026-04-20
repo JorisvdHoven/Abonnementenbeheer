@@ -157,7 +157,7 @@ function Section({ title, rows, onView, showUrgency, accent }) {
                 <col style={{ width: '16%' }} />
                 <col className="hidden lg:table-column" style={{ width: '22%' }} />
                 <col className="hidden sm:table-column" style={{ width: '10%' }} />
-                <col style={{ width: '4%' }} />
+                <col style={{ width: '10%' }} />
               </colgroup>
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/60">
