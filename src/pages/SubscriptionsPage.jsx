@@ -1,195 +1,354 @@
 import { useState } from 'react';
 import { useSubscriptions } from '../hooks/useSubscriptions';
 import { useSettings } from '../hooks/useSettings';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import SubscriptionModal from '../components/SubscriptionModal';
+import { SubscriptionDetailPanel } from '../components/SubscriptionDetailPanel';
+import { SubLogo } from '../components/SubLogo';
+import { addDays, isBefore } from 'date-fns';
+import { toMonthly } from '../lib/costUtils';
+
+function StatusBadge({ status }) {
+  const styles = {
+    actief:   'bg-green-50 text-green-700 ring-1 ring-green-200',
+    verlopen: 'bg-red-50 text-red-600 ring-1 ring-red-200',
+    opgezegd: 'bg-slate-100 text-slate-500 ring-1 ring-slate-200',
+  };
+  const labels = { actief: 'Actief', verlopen: 'Verlopen', opgezegd: 'Opgezegd' };
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${styles[status] ?? styles.opgezegd}`}>
+      {labels[status] ?? status}
+    </span>
+  );
+}
+
+function CostDisplay({ sub }) {
+  if (!sub.cost) return <span className="text-slate-400">—</span>;
+  const sym = sub.currency === 'USD' ? '$' : '€';
+  if (sub.cost_period === 'Eenmalig') {
+    return <span>{sym}{sub.cost} <span className="text-xs text-slate-400">eenmalig</span></span>;
+  }
+  const monthly = toMonthly(sub.cost, sub.cost_period);
+  if (sub.cost_period === 'Maandelijks') return <span>{sym}{sub.cost}<span className="text-xs text-slate-400 ml-0.5">/mnd</span></span>;
+  return (
+    <span title={`${sym}${sub.cost} ${sub.cost_period}`}>
+      €{monthly.toFixed(2)}<span className="text-xs text-slate-400 ml-0.5">/mnd</span>
+    </span>
+  );
+}
+
+function DaysLeft({ date, urgent }) {
+  if (!date) return null;
+  const days = Math.ceil((new Date(date) - new Date()) / (1000 * 60 * 60 * 24));
+  if (days < 0) return <span className="text-xs text-red-400">Verlopen</span>;
+  return (
+    <span className={`text-xs font-medium ${urgent ? 'text-orange-500' : 'text-slate-400'}`}>
+      nog {days}d
+    </span>
+  );
+}
+
+function SubRow({ sub, onView, showUrgency }) {
+  const renewalDate = sub.renewal_date || sub.end_date;
+  const isUrgent = showUrgency && renewalDate;
+  return (
+    <tr
+      onClick={() => onView(sub)}
+      className="group cursor-pointer border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors duration-100"
+    >
+      <td className="px-5 py-3.5">
+        <div className="flex items-center gap-3">
+          <SubLogo vendor={sub.vendor} name={sub.name} />
+          <div>
+            <p className="font-semibold text-dark text-sm">{sub.name}</p>
+            {sub.vendor && <p className="text-xs text-slate-400 mt-0.5">{sub.vendor}</p>}
+          </div>
+        </div>
+      </td>
+      <td className="px-5 py-3.5 hidden md:table-cell">
+        {sub.category
+          ? <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-xs font-medium">{sub.category}</span>
+          : <span className="text-slate-300 text-xs">—</span>}
+      </td>
+      <td className="px-5 py-3.5 text-sm font-medium text-dark">
+        <CostDisplay sub={sub} />
+      </td>
+      <td className="px-5 py-3.5 hidden lg:table-cell">
+        {renewalDate ? (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-slate-600">{new Date(renewalDate).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+            {isUrgent && <DaysLeft date={renewalDate} urgent={true} />}
+          </div>
+        ) : (
+          <span className="text-slate-300 text-xs">—</span>
+        )}
+      </td>
+      <td className="px-5 py-3.5 hidden sm:table-cell">
+        <StatusBadge status={sub.status} />
+      </td>
+      <td className="px-5 py-3.5 text-right">
+        <span className="text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity font-medium">
+          Bekijken →
+        </span>
+      </td>
+    </tr>
+  );
+}
+
+const COLUMNS = [
+  { key: 'name',         label: 'Naam',            className: '' },
+  { key: 'category',     label: 'Categorie',       className: 'hidden md:table-cell' },
+  { key: 'cost',         label: 'Kosten',          className: '' },
+  { key: 'renewal_date', label: 'Verlengingsdatum',className: 'hidden lg:table-cell' },
+  { key: 'status',       label: 'Status',          className: 'hidden sm:table-cell' },
+];
+
+function Section({ title, rows, onView, showUrgency, accent }) {
+  const [open, setOpen] = useState(true);
+  const [sortKey, setSortKey] = useState(null);
+  const [sortDir, setSortDir] = useState('asc');
+
+  const handleSort = (key) => {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir('asc'); }
+  };
+
+  const getSortVal = (sub, key) => {
+    if (key === 'cost') return toMonthly(sub.cost || 0, sub.cost_period);
+    if (key === 'renewal_date') return sub.renewal_date || sub.end_date || null;
+    return sub[key] ?? null;
+  };
+
+  const sorted = sortKey ? [...rows].sort((a, b) => {
+    const aVal = getSortVal(a, sortKey);
+    const bVal = getSortVal(b, sortKey);
+    if (aVal === null && bVal === null) return 0;
+    if (aVal === null) return 1;
+    if (bVal === null) return -1;
+    if (typeof aVal === 'number') return sortDir === 'asc' ? aVal - bVal : bVal - aVal;
+    return sortDir === 'asc'
+      ? String(aVal).localeCompare(String(bVal), 'nl')
+      : String(bVal).localeCompare(String(aVal), 'nl');
+  }) : rows;
+
+  return (
+    <div className={`surface-card-strong overflow-hidden ${accent === 'orange' ? 'border-l-4 border-orange-400' : ''}`}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <span className="font-semibold text-dark">{title}</span>
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+            accent === 'orange' ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-500'
+          }`}>{rows.length}</span>
+        </div>
+        <span className="text-slate-400 text-xs">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="border-t border-slate-100">
+          {rows.length === 0 ? (
+            <p className="px-5 py-4 text-sm text-slate-400">Geen abonnementen.</p>
+          ) : (
+            <table className="w-full text-sm table-fixed">
+              <colgroup>
+                <col style={{ width: '30%' }} />
+                <col className="hidden md:table-column" style={{ width: '18%' }} />
+                <col style={{ width: '16%' }} />
+                <col className="hidden lg:table-column" style={{ width: '22%' }} />
+                <col className="hidden sm:table-column" style={{ width: '10%' }} />
+                <col style={{ width: '4%' }} />
+              </colgroup>
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/60">
+                  {COLUMNS.map(col => (
+                    <th
+                      key={col.key}
+                      onClick={() => handleSort(col.key)}
+                      className={`px-5 py-2.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wide cursor-pointer select-none hover:text-slate-600 transition-colors ${col.className}`}
+                    >
+                      {col.label}
+                      {sortKey === col.key
+                        ? <span className="ml-1 text-primary">{sortDir === 'asc' ? '↑' : '↓'}</span>
+                        : <span className="ml-1 opacity-30">↕</span>}
+                    </th>
+                  ))}
+                  <th className="px-5 py-2.5" />
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map(sub => (
+                  <SubRow key={sub.id} sub={sub} onView={onView} showUrgency={showUrgency} />
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function SubscriptionsPage() {
   const { subscriptions, loading, addSubscription, updateSubscription, deleteSubscription } = useSubscriptions();
+  const { categories: settingCategories, types, addCategory, addType } = useSettings();
+  const { isAdmin } = useCurrentUser();
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSub, setEditingSub] = useState(null);
-  const { categories: settingCategories, types, loading: settingsLoading } = useSettings();
-
-  const filteredSubs = subscriptions.filter(sub => {
-    const searchText = search.toLowerCase();
-    const matchesSearch = sub.name.toLowerCase().includes(searchText) ||
-                          (sub.vendor && sub.vendor.toLowerCase().includes(searchText)) ||
-                          (sub.contact_name && sub.contact_name.toLowerCase().includes(searchText)) ||
-                          (sub.contact_email && sub.contact_email.toLowerCase().includes(searchText)) ||
-                          (sub.contact_phone && sub.contact_phone.toLowerCase().includes(searchText));
-    const matchesCategory = !categoryFilter || sub.category === categoryFilter;
-    const matchesStatus = !statusFilter || sub.status === statusFilter;
-    const matchesType = !typeFilter || sub.type === typeFilter;
-    return matchesSearch && matchesCategory && matchesStatus && matchesType;
-  });
+  const [detailSub, setDetailSub] = useState(null);
+  const [saveError, setSaveError] = useState(null);
 
   const categories = settingCategories.length > 0
-    ? settingCategories.map((category) => category.name)
-    : [...new Set(subscriptions.map(sub => sub.category).filter(Boolean))];
-  const statuses = [...new Set(subscriptions.map(sub => sub.status))];
+    ? settingCategories.map(c => c.name)
+    : [...new Set(subscriptions.map(s => s.category).filter(Boolean))];
   const typesList = types.length > 0
-    ? types.map((type) => type.name)
-    : [...new Set(subscriptions.map(sub => sub.type).filter(Boolean))];
+    ? types.map(t => t.name)
+    : [...new Set(subscriptions.map(s => s.type).filter(Boolean))];
 
-  const handleAdd = () => {
-    setEditingSub(null);
-    setModalOpen(true);
+  const applyFilters = (list) => list.filter(sub => {
+    const q = search.toLowerCase();
+    const matchSearch = sub.name.toLowerCase().includes(q) ||
+      (sub.vendor?.toLowerCase().includes(q)) ||
+      (sub.contact_name?.toLowerCase().includes(q));
+    return matchSearch
+      && (!categoryFilter || sub.category === categoryFilter)
+      && (!typeFilter || sub.type === typeFilter);
+  });
+
+  const now = new Date();
+  const soon = addDays(now, 60);
+  const filtered = applyFilters(subscriptions);
+
+  const expiringSoon = filtered.filter(s => {
+    if (s.status !== 'actief' || s.auto_renew) return false;
+    const renewalSoon = s.renewal_date && isBefore(new Date(s.renewal_date), soon);
+    const endSoon = s.end_date && isBefore(new Date(s.end_date), soon);
+    return renewalSoon || endSoon;
+  });
+  const expiringSoonIds = new Set(expiringSoon.map(s => s.id));
+  const actief   = filtered.filter(s => s.status === 'actief' && !expiringSoonIds.has(s.id));
+  const verlopen = filtered.filter(s => s.status === 'verlopen');
+  const opgezegd = filtered.filter(s => s.status === 'opgezegd');
+
+  const handleView   = (sub) => setDetailSub(sub);
+  const handleEdit   = (sub) => { setDetailSub(null); setEditingSub(sub); setModalOpen(true); };
+  const handleAdd    = () => { setEditingSub(null); setModalOpen(true); };
+  const handleDelete = async (id) => {
+    if (confirm('Weet je zeker dat je dit abonnement wilt verwijderen?')) {
+      await deleteSubscription(id);
+      setDetailSub(null);
+    }
   };
-
-  const handleEdit = (sub) => {
-    setEditingSub(sub);
-    setModalOpen(true);
-  };
-
   const handleSave = async (subData) => {
-    if (editingSub) {
-      await updateSubscription(editingSub.id, subData);
-    } else {
-      await addSubscription(subData);
+    setSaveError(null);
+    const result = editingSub
+      ? await updateSubscription(editingSub.id, subData)
+      : await addSubscription(subData);
+    if (result?.error) {
+      setSaveError(`Opslaan mislukt: ${result.error.message}`);
+      return;
     }
     setModalOpen(false);
   };
 
-  const handleDelete = async (id) => {
-    if (confirm('Weet je zeker dat je dit abonnement wilt verwijderen?')) {
-      await deleteSubscription(id);
-    }
+  const handleExportCSV = () => {
+    const headers = ['Naam','Leverancier','Categorie','Type','Kosten','Valuta','Periode','Verlengingsdatum','Status'];
+    const rows = filtered.map(sub => [
+      sub.name ?? '', sub.vendor ?? '', sub.category ?? '', sub.type ?? '',
+      sub.cost != null ? sub.cost.toString().replace('.', ',') : '',
+      sub.currency ?? 'EUR', sub.cost_period ?? '',
+      sub.renewal_date ? new Date(sub.renewal_date).toLocaleDateString('nl-NL') : '',
+      sub.status ?? '',
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`));
+    const csv = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `abonnementen-${new Date().toLocaleDateString('nl-NL').replace(/\//g, '-')}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
-  if (loading) {
-    return <div className="p-6">Loading...</div>;
-  }
+  if (loading) return <div className="p-6">Loading...</div>;
+
+  const totalMonthly = subscriptions
+    .filter(s => s.status === 'actief')
+    .reduce((sum, s) => sum + (toMonthly(s.cost, s.cost_period) || 0), 0);
 
   return (
-    <div className="p-6 space-y-5">
-      <div className="surface-card-strong flex justify-between items-center p-5">
-        <h1 className="text-2xl font-bold text-dark">Abonnementen</h1>
-        <button
-          onClick={handleAdd}
-          className="btn-primary"
-        >
-          + Nieuw abonnement
-        </button>
-      </div>
-
-      <div className="surface-card p-4 space-y-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <input
-            type="text"
-            placeholder="Zoek op naam, leverancier of contact"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="field-strong flex-1 px-3 py-2 rounded-md focus:outline-none"
-          />
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="field-strong px-3 py-2 rounded-md focus:outline-none"
-          >
-            <option value="">Alle categorieën</option>
-            {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-          </select>
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="field-strong px-3 py-2 rounded-md focus:outline-none"
-          >
-            <option value="">Alle types</option>
-            {typesList.map(type => <option key={type} value={type}>{type}</option>)}
-          </select>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="field-strong px-3 py-2 rounded-md focus:outline-none"
-          >
-            <option value="">Alle statussen</option>
-            {statuses.map(status => <option key={status} value={status}>{status}</option>)}
-          </select>
+    <div className="p-6 space-y-4">
+      {/* Header */}
+      <div className="surface-card-strong p-5 flex flex-col sm:flex-row justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-dark">Abonnementen</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            {subscriptions.filter(s => s.status === 'actief').length} actief · €{totalMonthly.toFixed(0)}/mnd
+          </p>
         </div>
-        {typeFilter && (
-          <div className="text-sm text-gray-600">
-            Totaal kosten voor type <span className="font-semibold">{typeFilter}</span>: €{filteredSubs.reduce((sum, sub) => sum + (sub.cost || 0), 0).toFixed(2)}
-          </div>
-        )}
+        <div className="flex gap-2 items-start">
+          <button onClick={handleExportCSV} className="btn-secondary text-sm">↓ CSV</button>
+          {isAdmin && <button onClick={handleAdd} className="btn-primary text-sm">+ Nieuw abonnement</button>}
+        </div>
       </div>
 
-      {/* Table */}
-      <div className="surface-card-strong overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="text-left py-3 px-4">Naam</th>
-              <th className="text-left py-3 px-4">Leverancier</th>
-              <th className="text-left py-3 px-4">Contactpersoon</th>
-              <th className="text-left py-3 px-4">Telefoon</th>
-              <th className="text-left py-3 px-4">E-mail</th>
-              <th className="text-left py-3 px-4">Categorie</th>
-              <th className="text-left py-3 px-4">Seats</th>
-              <th className="text-left py-3 px-4">Kosten/mnd</th>
-              <th className="text-left py-3 px-4">Verlengingsdatum</th>
-              <th className="text-left py-3 px-4">Document</th>
-              <th className="text-left py-3 px-4">Status</th>
-              <th className="text-left py-3 px-4">Acties</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredSubs.map(sub => (
-              <tr key={sub.id} className="cursor-pointer border-b border-slate-100 transition-colors duration-150 hover:bg-orange-50" onClick={() => handleEdit(sub)}>
-                <td className="py-3 px-4">{sub.name}</td>
-                <td className="py-3 px-4">{sub.vendor}</td>
-                <td className="py-3 px-4">{sub.contact_name || '-'}</td>
-                <td className="py-3 px-4">{sub.contact_phone || '-'}</td>
-                <td className="py-3 px-4">{sub.contact_email || '-'}</td>
-                <td className="py-3 px-4">{sub.category}</td>
-                <td className="py-3 px-4">{sub.seats}</td>
-                <td className="py-3 px-4">€{sub.cost}</td>
-                <td className="py-3 px-4">{sub.renewal_date ? new Date(sub.renewal_date).toLocaleDateString() : '-'}</td>
-                <td className="py-3 px-4">
-                  {sub.document_content ? (
-                    <a
-                      href={sub.document_content}
-                      download={sub.document_name || `${sub.name}-document`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="font-medium text-primary transition-all duration-150 hover:text-orange-600 hover:underline"
-                    >
-                      {sub.document_name || 'Download'}
-                    </a>
-                  ) : (
-                    <span className="text-gray-400">-</span>
-                  )}
-                </td>
-                <td className="py-3 px-4">
-                  <span className={`px-2 py-1 rounded-full text-xs ${
-                    sub.status === 'actief' ? 'bg-green-100 text-green-800' :
-                    sub.status === 'verlopen' ? 'bg-red-100 text-red-800' :
-                    'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {sub.status}
-                  </span>
-                </td>
-                <td className="py-3 px-4">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleDelete(sub.id); }}
-                    className="rounded-md px-2 py-1 font-medium text-red-600 transition-all duration-150 hover:bg-red-50 hover:text-red-800"
-                  >
-                    Verwijder
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* Filters */}
+      <div className="surface-card p-3 flex flex-col sm:flex-row gap-2">
+        <input
+          type="text"
+          placeholder="Zoek op naam of leverancier…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="field-strong flex-1 px-3 py-2 rounded-md border text-sm focus:outline-none"
+        />
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          className="field-strong px-3 py-2 rounded-md border text-sm focus:outline-none"
+        >
+          <option value="">Alle categorieën</option>
+          {categories.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          className="field-strong px-3 py-2 rounded-md border text-sm focus:outline-none"
+        >
+          <option value="">Alle types</option>
+          {typesList.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
       </div>
+
+      {/* Sections */}
+      {expiringSoon.length > 0 && (
+        <Section title="Verloopt binnenkort" rows={expiringSoon} onView={handleView} showUrgency accent="orange" />
+      )}
+      <Section title="Actief" rows={actief} onView={handleView} />
+      <Section title="Verlopen" rows={verlopen} onView={handleView} />
+      <Section title="Opgezegd" rows={opgezegd} onView={handleView} />
+
+      {detailSub && (
+        <SubscriptionDetailPanel
+          sub={detailSub}
+          onClose={() => setDetailSub(null)}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+        />
+      )}
 
       {modalOpen && (
         <SubscriptionModal
           subscription={editingSub}
+          categoryOptions={categories}
           typeOptions={typesList}
+          onAddCategory={addCategory}
+          onAddType={addType}
           onSave={handleSave}
-          onClose={() => setModalOpen(false)}
+          onClose={() => { setModalOpen(false); setSaveError(null); }}
+          saveError={saveError}
         />
       )}
     </div>

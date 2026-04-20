@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { backfillSubscriptionSnapshots, removeSubscriptionFromSnapshots } from '../lib/snapshotUtils';
 
 export function useSubscriptions() {
   const [subscriptions, setSubscriptions] = useState([]);
@@ -23,6 +24,11 @@ export function useSubscriptions() {
     setLoading(false);
   };
 
+  const getUserId = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    return user?.id;
+  };
+
   const addSubscription = async (subscription) => {
     const { data, error } = await supabase
       .from('subscriptions')
@@ -31,11 +37,17 @@ export function useSubscriptions() {
 
     if (error) {
       console.error('Error adding subscription:', error);
-      return null;
-    } else {
-      setSubscriptions([data[0], ...subscriptions]);
-      return data[0];
+      return { error };
     }
+
+    const saved = data[0];
+    setSubscriptions(prev => [saved, ...prev]);
+
+    // Backfill historische snapshots als de startdatum in het verleden ligt
+    const userId = await getUserId();
+    if (userId) await backfillSubscriptionSnapshots(supabase, saved, userId);
+
+    return { data: saved };
   };
 
   const updateSubscription = async (id, updates) => {
@@ -47,12 +59,25 @@ export function useSubscriptions() {
 
     if (error) {
       console.error('Error updating subscription:', error);
-    } else {
-      setSubscriptions(subscriptions.map(sub => sub.id === id ? data[0] : sub));
+      return { error };
     }
+
+    const saved = data[0];
+    setSubscriptions(prev => prev.map(sub => sub.id === id ? saved : sub));
+
+    // Herbereken snapshots als startdatum of kosten gewijzigd zijn
+    const userId = await getUserId();
+    if (userId) {
+      await removeSubscriptionFromSnapshots(supabase, id, userId);
+      await backfillSubscriptionSnapshots(supabase, saved, userId);
+    }
+
+    return { data: saved };
   };
 
   const deleteSubscription = async (id) => {
+    const userId = await getUserId();
+
     const { error } = await supabase
       .from('subscriptions')
       .delete()
@@ -61,7 +86,8 @@ export function useSubscriptions() {
     if (error) {
       console.error('Error deleting subscription:', error);
     } else {
-      setSubscriptions(subscriptions.filter(sub => sub.id !== id));
+      setSubscriptions(prev => prev.filter(sub => sub.id !== id));
+      if (userId) await removeSubscriptionFromSnapshots(supabase, id, userId);
     }
   };
 
@@ -71,6 +97,6 @@ export function useSubscriptions() {
     addSubscription,
     updateSubscription,
     deleteSubscription,
-    refetch: fetchSubscriptions
+    refetch: fetchSubscriptions,
   };
 }

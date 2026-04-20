@@ -5,6 +5,17 @@ export function useSettings() {
   const [categories, setCategories] = useState([]);
   const [types, setTypes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [exchangeRate, setExchangeRateState] = useState(
+    () => parseFloat(localStorage.getItem('usd_eur_rate') || '0.93')
+  );
+
+  const updateExchangeRate = (rate) => {
+    const parsed = parseFloat(rate);
+    if (!isNaN(parsed) && parsed > 0) {
+      localStorage.setItem('usd_eur_rate', parsed.toString());
+      setExchangeRateState(parsed);
+    }
+  };
 
   useEffect(() => {
     fetchSettings();
@@ -79,6 +90,8 @@ export function useSettings() {
     categories,
     types,
     loading,
+    exchangeRate,
+    updateExchangeRate,
     addCategory,
     addType,
     deleteCategory,
