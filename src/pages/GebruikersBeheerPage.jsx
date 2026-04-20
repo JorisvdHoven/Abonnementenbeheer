@@ -84,7 +84,7 @@ function InviteModal({ onClose, onInvite }) {
 }
 
 function GebruikersBeheerPage() {
-  const { users, loading, updateUser, inviteUser } = useUsers();
+  const { users, loading, updateUser, deleteUser, inviteUser } = useUsers();
   const { profile: currentUser, isAdmin, loading: roleLoading } = useCurrentUser();
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
@@ -106,7 +106,13 @@ function GebruikersBeheerPage() {
 
   const startEdit = (user) => {
     setEditingId(user.id);
-    setEditForm({ full_name: user.full_name || '', role: user.role || 'viewer' });
+    setEditForm({ full_name: user.full_name || '', email: user.email || '', role: user.role || 'viewer' });
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm('Weet je zeker dat je deze gebruiker wilt verwijderen?')) return;
+    const result = await deleteUser(id);
+    if (result?.error) setSaveError(result.error);
   };
 
   const cancelEdit = () => { setEditingId(null); setEditForm({}); setSaveError(null); };
@@ -175,7 +181,18 @@ function GebruikersBeheerPage() {
                       {isMe && <span className="text-xs text-slate-400">(jij)</span>}
                     </div>
                   </td>
-                  <td className="px-5 py-3 text-slate-500">{u.email || '—'}</td>
+                  <td className="px-5 py-3 text-slate-500">
+                    {isEditing ? (
+                      <input
+                        value={editForm.email}
+                        onChange={(e) => setEditForm(f => ({ ...f, email: e.target.value }))}
+                        className="field-strong px-2 py-1 rounded-md border focus:outline-none text-sm w-48"
+                        type="email"
+                      />
+                    ) : (
+                      u.email || '—'
+                    )}
+                  </td>
                   <td className="px-5 py-3">
                     {isEditing ? (
                       <select
@@ -207,9 +224,16 @@ function GebruikersBeheerPage() {
                         </button>
                       </div>
                     ) : (
-                      <button onClick={() => startEdit(u)} className="text-xs text-primary hover:underline">
-                        Bewerken
-                      </button>
+                      <div className="flex justify-end gap-3">
+                        <button onClick={() => startEdit(u)} className="text-xs text-primary hover:underline">
+                          Bewerken
+                        </button>
+                        {!isMe && (
+                          <button onClick={() => handleDelete(u.id)} className="text-xs text-red-400 hover:text-red-600">
+                            Verwijder
+                          </button>
+                        )}
+                      </div>
                     )}
                   </td>
                 </tr>
