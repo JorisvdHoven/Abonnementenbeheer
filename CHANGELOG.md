@@ -58,6 +58,29 @@
 - Automatisch terugvullen van historische snapshots bij toevoegen of bewerken van een abonnement met een datum in het verleden
 - Snapshot-cleanup bij verwijderen van een abonnement
 
+#### Abonnement toevoegen / bewerken
+- Nieuw veld **"Prijs per seat"** — checkbox die de kosten vermenigvuldigt met het aantal seats, handig voor per-gebruiker-licenties
+- Info-tooltip (ⓘ) toegevoegd naast Categorie en Type met uitleg over het veld
+
+#### Navbar
+- Compacter (lagere hoogte)
+- Avatar met initialen naast de gebruikersnaam
+- Bell-icoon subtiele stijl met rood stipje bij notificaties
+- Notificatie-dropdown netter met rounded hoeken en scheidingslijnen
+- Uitlog-knop vervangen door icoon met label
+
+#### Detailpaneel abonnement
+- Secties in lichtgrijze blokjes voor meer overzicht
+- Sluit nu ook met de Escape-toets
+- Paneel iets breder (`max-w-lg`)
+- Kosten tonen vermenigvuldiging als "Prijs per seat" actief is
+
+#### Dashboard
+- Y-as van de kostengrafiek schaalt nu op basis van het maximum over álle jaren — geen sprongen meer bij wisselen van jaar
+
+#### Abonnementen
+- "Bekijken →" kolom had te weinig breedte en werd afgeknipt — opgelost
+
 ---
 
 ### Supabase
@@ -67,6 +90,7 @@
 - Nieuwe tabel `evaluaties` — gebruikspercentage en notitie per abonnement, bijgehouden per gebruiker
 - Nieuwe tabel `monthly_snapshots` — maandelijkse kostengeschiedenis per gebruiker (jaar, maand, totaalkosten + details per abonnement)
 - Nieuwe kolom `auto_renew` op `subscriptions` — bepaalt of een abonnement automatisch verlengt
+- Nieuwe kolom `cost_per_seat` op `subscriptions` — bepaalt of de kosten per seat berekend worden
 - RLS-policy fix op `profiles` UPDATE — recursie opgelost via een `SECURITY DEFINER` functie `is_admin()`
 
 #### Edge Functions
