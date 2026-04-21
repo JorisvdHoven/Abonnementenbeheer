@@ -19,6 +19,7 @@ export async function backfillSubscriptionSnapshots(supabase, sub, userId) {
     id: sub.id,
     name: sub.name,
     vendor: sub.vendor,
+    department: sub.department || null,
     cost: sub.cost,
     currency: sub.currency || 'EUR',
     cost_period: sub.cost_period,

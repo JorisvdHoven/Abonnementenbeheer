@@ -164,7 +164,19 @@ function EvaluatiePage() {
     <div className="p-6 space-y-4">
       <div className="surface-card-strong p-5 flex flex-col sm:flex-row justify-between gap-4 items-center">
         <div>
-          <h1 className="text-2xl font-bold text-dark">Evaluatie</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-dark">Evaluatie</h1>
+            <div className="relative group mb-0.5">
+              <span className="flex items-center justify-center w-4 h-4 rounded-full bg-slate-300 text-white text-xs font-bold cursor-default select-none">i</span>
+              <div className="absolute left-0 top-6 z-10 hidden group-hover:block w-80 rounded-md bg-slate-800 text-white text-xs p-3 shadow-lg font-normal">
+                <p className="font-semibold mb-1">Wat is evaluatie?</p>
+                <p className="mb-2">Hier geef je per abonnement aan hoe intensief het gebruikt wordt binnen jullie organisatie.</p>
+                <p className="mb-2">Vul een <strong>gebruikspercentage</strong> in (0–100%) en optioneel een notitie. Dit helpt om te bepalen welke abonnementen de moeite waard zijn.</p>
+                <p className="mb-2">Evaluaties ouder dan <strong>4 maanden</strong> worden gemarkeerd als verouderd — dan is het tijd om opnieuw te beoordelen.</p>
+                <p>Abonnementen met een laag gebruik zijn zichtbaar op het dashboard als bespaartip.</p>
+              </div>
+            </div>
+          </div>
           <p className="mt-1 text-sm text-slate-500">
             {metEvaluatie.length} van {actieveSubscriptions.length} actieve abonnementen geëvalueerd
           </p>

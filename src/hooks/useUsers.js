@@ -39,5 +39,20 @@ export function useUsers() {
     return result;
   };
 
-  return { users, loading, updateUser, inviteUser, refetch: fetchUsers };
+  const deleteUser = async (user_id) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ user_id }),
+    });
+    const result = await res.json();
+    if (res.ok) await fetchUsers();
+    return result;
+  };
+
+  return { users, loading, updateUser, deleteUser, inviteUser, refetch: fetchUsers };
 }

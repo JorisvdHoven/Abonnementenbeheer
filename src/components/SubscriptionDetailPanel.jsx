@@ -77,6 +77,7 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
           <Section title="Abonnement">
             <DetailRow label="Categorie" value={sub.category} />
             <DetailRow label="Type" value={sub.type} />
+            <DetailRow label="Afdeling" value={sub.department} />
             <DetailRow label="Seats" value={sub.seats} />
           </Section>
 
