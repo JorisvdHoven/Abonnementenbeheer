@@ -30,7 +30,7 @@ function LoginPage() {
     }
 
     await supabase.auth.resetPasswordForEmail(forgotEmail, {
-      redirectTo: `${window.location.origin}/#/reset-password`,
+      redirectTo: window.location.origin,
     });
     setForgotLoading(false);
     setForgotStatus('sent');

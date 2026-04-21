@@ -199,8 +199,6 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
     const errors = {};
     if (!formData.name.trim())
       errors.name = 'Naam is verplicht.';
-    if (!formData.category)
-      errors.category = 'Categorie is verplicht.';
     if (!formData.type)
       errors.type = 'Type is verplicht.';
     if (!formData.department)
@@ -235,6 +233,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
     const { data: { user } } = await supabase.auth.getUser();
     const dataToSave = {
       ...formData,
+      category: formData.category || 'Overig',
       cost: parseFloat(formData.cost) || 0,
       seats: parseInt(formData.seats) || 1,
       start_date: formData.start_date || null,
@@ -321,8 +320,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
                 onChange={(val) => setFormData(prev => ({ ...prev, category: val }))}
                 onAdd={onAddCategory}
                 error={fieldErrors.category}
-                required
-                tooltip="Categorie geeft aan tot welk bedrijfsonderdeel of kostenpost een abonnement behoort. Wordt gebruikt voor de kostengrafiek op het dashboard en voor filteren."
+                tooltip="Categorie geeft aan tot welk bedrijfsonderdeel of kostenpost een abonnement behoort. Wordt gebruikt voor de kostengrafiek op het dashboard en voor filteren. Als je niets kiest, wordt automatisch 'Overig' gebruikt."
               />
               <AddableSelect
                 label="Type"
