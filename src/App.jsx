@@ -18,6 +18,11 @@ function App() {
   useDailySnapshot();
 
   useEffect(() => {
+    // Detect invite en password recovery flow vanuit URL hash
+    if (window.location.hash.includes('type=invite') || window.location.hash.includes('type=recovery')) {
+      setIsRecovery(true);
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       setLoading(false);
@@ -27,7 +32,7 @@ function App() {
       (event, session) => {
         if (event === 'PASSWORD_RECOVERY') {
           setIsRecovery(true);
-        } else if (event === 'SIGNED_OUT') {
+        } else if (event === 'USER_UPDATED' || event === 'SIGNED_OUT') {
           setIsRecovery(false);
         }
         setUser(session?.user ?? null);

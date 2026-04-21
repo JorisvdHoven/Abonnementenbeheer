@@ -182,7 +182,7 @@ function SubRow({ sub, onView, showUrgency }) {
 
 const COLUMNS = [
   { key: 'name',         label: 'Naam',            className: '' },
-  { key: 'category',     label: 'Categorie',       className: 'hidden md:table-cell' },
+  { key: 'category',     label: 'Afdeling',        className: 'hidden md:table-cell' },
   { key: 'cost',         label: 'Kosten',          className: '' },
   { key: 'renewal_date', label: 'Verlengingsdatum',className: 'hidden lg:table-cell' },
   { key: 'status',       label: 'Status',          className: 'hidden sm:table-cell' },
