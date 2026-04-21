@@ -17,7 +17,49 @@ import {
   CalendarDaysIcon,
 } from '@heroicons/react/24/outline';
 
-function LineChart({ data, currentMonth, months, snapshots, currentYear, globalMax }) {
+const DEPT_COLORS = [
+  '#60a5fa', // blue-400
+  '#34d399', // emerald-400
+  '#a78bfa', // violet-400
+  '#22d3ee', // cyan-400
+  '#fbbf24', // amber-400
+  '#f472b6', // pink-400
+  '#818cf8', // indigo-400
+  '#4ade80', // green-400
+  '#38bdf8', // sky-400
+  '#e879f9', // fuchsia-400
+];
+
+function useAnimated(value, duration = 450) {
+  const isArr = Array.isArray(value);
+  const toArr = (v) => isArr ? v : [v];
+  const [animated, setAnimated] = useState(toArr(value));
+  const fromRef = useRef(toArr(value));
+  const rafRef = useRef(null);
+
+  useEffect(() => {
+    const from = [...fromRef.current];
+    const to = toArr(value);
+    const t0 = performance.now();
+
+    const tick = (now) => {
+      const t = Math.min((now - t0) / duration, 1);
+      const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      const next = from.map((f, i) => f + ((to[i] ?? 0) - f) * ease);
+      fromRef.current = next;
+      setAnimated([...next]);
+      if (t < 1) rafRef.current = requestAnimationFrame(tick);
+    };
+
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [JSON.stringify(value)]);
+
+  return isArr ? animated : animated[0];
+}
+
+function LineChart({ data, showTotal = true, currentMonth, months, snapshots, currentYear, chartMax, departmentData, visibleDepts, colorMap = {} }) {
   const [tooltip, setTooltip] = useState(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const [dims, setDims] = useState({ w: 600, h: 200 });
@@ -37,24 +79,31 @@ function LineChart({ data, currentMonth, months, snapshots, currentYear, globalM
   const padL = 48, padR = 16, padT = 16, padB = 30;
   const innerW = W - padL - padR;
   const innerH = H - padT - padB;
-  const max = globalMax ?? Math.max(...data, 1);
+
+  const rawMax = chartMax ?? Math.max(...data, 1);
+  const animMax = useAnimated(rawMax);
+  const animData = useAnimated(data);
+  const max = animMax;
 
   const x = (i) => padL + (i / 11) * innerW;
   const y = (v) => padT + innerH - (v / max) * innerH;
 
-  const histPoints = data
-    .map((v, i) => ({ v, i, hasSnap: snapshots.some(s => s.year === currentYear && s.month === i) }))
+  const histPoints = animData
+    .map((v, i) => ({ v, i }))
     .filter(p => p.i <= currentMonth);
-  const forePoints = data
+  const forePoints = animData
     .map((v, i) => ({ v, i }))
     .filter(p => p.i >= currentMonth);
 
   const toPath = (points) => points.map((p, idx) => `${idx === 0 ? 'M' : 'L'}${x(p.i).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ');
 
+  // Render alle afdelingen, zichtbaarheid via opacity (voor smooth fade)
+  const deptEntries = departmentData ? Object.entries(departmentData) : [];
+
   return (
     <div ref={containerRef} className="relative w-full" style={{ height: 'calc(100% - 48px)', minHeight: 150 }}>
       <svg width={W} height={H} className="w-full h-full">
-        {/* Y gridlines */}
+        {/* Y gridlines + labels */}
         {[0.25, 0.5, 0.75, 1].map(f => (
           <g key={f}>
             <line x1={padL} x2={W - padR} y1={y(max * f)} y2={y(max * f)} stroke="#e2e8f0" strokeWidth="1" />
@@ -62,28 +111,45 @@ function LineChart({ data, currentMonth, months, snapshots, currentYear, globalM
           </g>
         ))}
 
-        {/* Historical line */}
-        {histPoints.length > 1 && (
+        {/* Department lines */}
+        {deptEntries.map(([dept, deptData]) => {
+          const color = colorMap[dept] ?? '#94a3b8';
+          const visible = visibleDepts?.has(dept) ?? false;
+          const allPts = deptData.map((v, i) => ({ v, i }));
+          const hPts = allPts.filter(p => p.i <= currentMonth);
+          const fPts = allPts.filter(p => p.i >= currentMonth);
+          return (
+            <g key={dept} style={{ opacity: visible ? 1 : 0, transition: 'opacity 0.35s ease' }}>
+              {hPts.length > 1 && <path d={toPath(hPts)} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />}
+              {fPts.length > 1 && <path d={toPath(fPts)} fill="none" stroke={color} strokeWidth="1.5" strokeDasharray="4,3" strokeLinecap="round" strokeLinejoin="round" opacity="0.5" />}
+            </g>
+          );
+        })}
+
+        {/* Historical line (total) */}
+        {showTotal && histPoints.length > 1 && (
           <path d={toPath(histPoints)} fill="none" stroke="#F47920" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
         )}
 
-        {/* Forecast line (dashed) */}
-        {forePoints.length > 1 && (
+        {/* Forecast line (dashed, total) */}
+        {showTotal && forePoints.length > 1 && (
           <path d={toPath(forePoints)} fill="none" stroke="#F47920" strokeWidth="2" strokeDasharray="5,4" strokeLinecap="round" strokeLinejoin="round" opacity="0.5" />
         )}
 
         {/* Dots + hover areas */}
-        {data.map((v, i) => {
+        {animData.map((v, i) => {
           const isFuture = i > currentMonth;
           const isCurrent = i === currentMonth;
           return (
             <g key={i}>
-              <circle
-                cx={x(i)} cy={y(v)} r={isCurrent ? 5 : 4}
-                fill={isFuture ? 'white' : '#F47920'}
-                stroke="#F47920" strokeWidth={isFuture ? 1.5 : 0}
-                opacity={isFuture ? 0.5 : 1}
-              />
+              {showTotal && (
+                <circle
+                  cx={x(i)} cy={y(v)} r={isCurrent ? 5 : 4}
+                  fill={isFuture ? 'white' : '#F47920'}
+                  stroke="#F47920" strokeWidth={isFuture ? 1.5 : 0}
+                  opacity={isFuture ? 0.5 : 1}
+                />
+              )}
               <rect
                 x={x(i) - 20} y={padT} width={40} height={innerH + 10}
                 fill="transparent"
@@ -103,16 +169,28 @@ function LineChart({ data, currentMonth, months, snapshots, currentYear, globalM
             fontWeight={i === currentMonth ? '600' : '400'}
           >{m}</text>
         ))}
-
       </svg>
 
       {tooltip && (
         <div
-          className="pointer-events-none fixed z-50 rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-white shadow-lg"
+          className="pointer-events-none fixed z-50 rounded-lg bg-slate-800 px-3 py-2 text-xs text-white shadow-lg space-y-1"
           style={{ left: tooltipPos.x + 12, top: tooltipPos.y - 36 }}
         >
-          <span className="text-slate-400 mr-1">{months[tooltip.i]}</span>
-          <span className="font-semibold">€{tooltip.v.toFixed(0)}</span>
+          {showTotal && (
+            <div className="flex items-center gap-1.5">
+              <span className="inline-block w-4 h-0.5 rounded bg-primary flex-shrink-0" />
+              <span className="text-slate-300">Totaal</span>
+              <span className="font-semibold ml-auto pl-3">€{(data[tooltip.i] ?? 0).toFixed(0)}</span>
+            </div>
+          )}
+          {deptEntries.map(([dept, deptData]) => (
+            <div key={dept} className="flex items-center gap-1.5">
+              <span className="inline-block w-4 h-0.5 rounded flex-shrink-0" style={{ backgroundColor: colorMap[dept] ?? '#94a3b8' }} />
+              <span className="text-slate-300">{dept}</span>
+              <span className="font-medium ml-auto pl-3">€{(deptData[tooltip.i] ?? 0).toFixed(0)}</span>
+            </div>
+          ))}
+          <div className="text-slate-500 pt-0.5">{months[tooltip.i]}</div>
         </div>
       )}
     </div>
@@ -145,13 +223,17 @@ function DashboardPage() {
   const { snapshots } = useMonthlySnapshots();
   const { evaluaties, loading: evalLoading } = useEvaluaties();
   const { notifications } = useNotifications();
-  const { exchangeRate, categories, types, addCategory, addType } = useSettings();
+  const { exchangeRate, categories, types, departments: settingDepartments, addCategory, addType, addDepartment } = useSettings();
   const [detailSub, setDetailSub] = useState(null);
   const [editingSub, setEditingSub] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [windowStart, setWindowStart] = useState(new Date().getFullYear() - 1);
   const [categoryPeriod, setCategoryPeriod] = useState('maand');
+  const [breakdownMode, setBreakdownMode] = useState('afdeling');
+  const [legendOpen, setLegendOpen] = useState(false);
+  const [visibleDepts, setVisibleDepts] = useState(null); // null = nog niet geïnitialiseerd
+  const [showTotalLine, setShowTotalLine] = useState(true);
 
   const handleEdit = (sub) => { setDetailSub(null); setEditingSub(sub); setModalOpen(true); };
   const handleDelete = async (id) => {
@@ -224,9 +306,15 @@ function DashboardPage() {
   const visibleYears = [windowStart, windowStart + 1, windowStart + 2];
 
   const selectedCashflow = Array(12).fill(0).map((_, m) => {
+    // Huidige maand altijd live berekenen (snapshot kan verouderd/leeg zijn)
+    if (selectedYear === currentYear && m === currentMonth) {
+      return activeSubs
+        .filter(sub => isActiveInMonth(sub, selectedYear, m))
+        .reduce((sum, sub) => sum + toEurMonthly(sub), 0);
+    }
     const snapshot = snapshots.find(s => s.year === selectedYear && s.month === m);
     if (snapshot) return snapshot.total_cost;
-    if (selectedYear > currentYear || (selectedYear === currentYear && m >= currentMonth)) {
+    if (selectedYear > currentYear || (selectedYear === currentYear && m > currentMonth)) {
       return activeSubs
         .filter(sub => isActiveInMonth(sub, selectedYear, m))
         .reduce((sum, sub) => sum + toEurMonthly(sub), 0);
@@ -234,12 +322,61 @@ function DashboardPage() {
     return 0;
   });
 
-  const globalMax = Math.max(
-    ...snapshots.map(s => s.total_cost),
-    ...selectedCashflow,
-    ...monthlyCashflow,
+  // Map van sub-id naar huidige afdeling — fallback voor oude snapshots zonder dept-veld
+  const subDeptMap = Object.fromEntries(subscriptions.map(s => [s.id, s.department || 'Geen afdeling']));
+
+  const allDepts = [...new Set([
+    ...activeSubs.map(s => s.department || 'Geen afdeling'),
+    ...snapshots.flatMap(s => (s.details || []).map(d => d.department || subDeptMap[d.id] || 'Geen afdeling')),
+  ])].sort();
+
+  const departmentCashflow = Object.fromEntries(
+    allDepts.map(dept => [
+      dept,
+      Array(12).fill(0).map((_, m) => {
+        const snapshot = snapshots.find(s => s.year === selectedYear && s.month === m);
+        // Gebruik snapshot dept-data alleen als de details expliciet dept-info bevatten
+        if (snapshot?.details?.some(d => d.department != null)) {
+          return snapshot.details
+            .filter(d => (d.department || 'Geen afdeling') === dept)
+            .reduce((sum, d) => sum + (d.monthly_equivalent || 0), 0);
+        }
+        // Geen (betrouwbare) dept-data in snapshot → bereken uit huidige abonnementen
+        return activeSubs
+          .filter(s => (s.department || 'Geen afdeling') === dept && isActiveInMonth(s, selectedYear, m))
+          .reduce((sum, s) => sum + toEurMonthly(s), 0);
+      })
+    ])
+  );
+
+  const deptColorMap = Object.fromEntries(allDepts.map((dept, idx) => [dept, DEPT_COLORS[idx % DEPT_COLORS.length]]));
+  const effectiveVisibleDepts = legendOpen ? (visibleDepts ?? new Set(allDepts)) : new Set();
+
+  const chartMax = Math.max(
+    ...(showTotalLine ? selectedCashflow : [0]),
+    ...Object.entries(departmentCashflow)
+      .filter(([dept]) => effectiveVisibleDepts.has(dept))
+      .flatMap(([, data]) => data),
     1
   );
+
+  const handleToggleLegend = () => {
+    if (!legendOpen && visibleDepts === null) setVisibleDepts(new Set(allDepts));
+    setLegendOpen(v => !v);
+  };
+
+  const toggleDept = (dept) => setVisibleDepts(prev => {
+    const next = new Set(prev ?? allDepts);
+    next.has(dept) ? next.delete(dept) : next.add(dept);
+    return next;
+  });
+
+  const effectiveDepts = visibleDepts ?? new Set(allDepts);
+  const allChecked = showTotalLine && allDepts.every(d => effectiveDepts.has(d));
+  const toggleAll = () => {
+    if (allChecked) { setVisibleDepts(new Set()); setShowTotalLine(false); }
+    else { setVisibleDepts(new Set(allDepts)); setShowTotalLine(true); }
+  };
 
   const CATEGORY_PERIODS = [
     { key: 'maand',    label: 'Maand',    factor: 1 },
@@ -254,7 +391,16 @@ function DashboardPage() {
     categoryCosts[cat] = (categoryCosts[cat] || 0) + toEurMonthly(s) * categoryFactor;
   });
   const sortedCategories = Object.entries(categoryCosts).sort((a, b) => b[1] - a[1]);
-  const maxCost = sortedCategories[0]?.[1] ?? 1;
+
+  const departmentCosts = {};
+  activeSubs.forEach(s => {
+    const dept = s.department || 'Geen afdeling';
+    departmentCosts[dept] = (departmentCosts[dept] || 0) + toEurMonthly(s) * categoryFactor;
+  });
+  const sortedDepartments = Object.entries(departmentCosts).sort((a, b) => b[1] - a[1]);
+
+  const breakdownRows = breakdownMode === 'categorie' ? sortedCategories : sortedDepartments;
+  const maxCost = breakdownRows[0]?.[1] ?? 1;
 
   const unusedSubs = activeSubs
     .map(sub => ({ sub, ev: evaluaties.find(e => e.subscription_id === sub.id) }))
@@ -297,15 +443,15 @@ function DashboardPage() {
       </div>
 
       {/* Middle row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:grid-rows-1" style={{ minHeight: '22rem' }}>
 
         {/* Expiring soon */}
-        <div className="surface-card-strong p-5">
+        <div className="surface-card-strong p-5 flex flex-col">
           <h2 className="text-base font-semibold text-dark mb-4">Verloopt binnen 60 dagen</h2>
           {expiringSoonList.length === 0 ? (
             <p className="text-sm text-slate-400">Geen abonnementen die binnenkort verlopen.</p>
           ) : (
-            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+            <div className="space-y-2 flex-1 overflow-y-auto pr-1">
               {expiringSoonList.map(sub => {
                 const expiryDate = sub.renewal_date || sub.end_date;
               const days = Math.ceil((new Date(expiryDate) - now) / (1000 * 60 * 60 * 24));
@@ -335,12 +481,12 @@ function DashboardPage() {
         </div>
 
         {/* Laag gebruik */}
-        <div className="surface-card-strong p-5">
+        <div className="surface-card-strong p-5 flex flex-col">
           <h2 className="text-base font-semibold text-dark mb-4">Weinig gebruikt <span className="text-xs font-normal text-slate-400 ml-1">≤ 30% gebruik</span></h2>
           {unusedSubs.length === 0 ? (
             <p className="text-sm text-slate-400">Geen abonnementen met laag gebruik.</p>
           ) : (
-            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+            <div className="space-y-2 flex-1 overflow-y-auto pr-1">
               {unusedSubs.map(({ sub, ev }) => (
                 <div key={sub.id} onClick={() => setDetailSub(sub)} className="flex items-center justify-between rounded-lg px-3 py-2 bg-slate-50 cursor-pointer hover:bg-slate-100 transition-all">
                   <div className="flex items-center gap-3">
@@ -360,10 +506,23 @@ function DashboardPage() {
           )}
         </div>
 
-        {/* Cost per category */}
-        <div className="surface-card-strong p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold text-dark">Kosten per categorie</h2>
+        {/* Cost breakdown widget */}
+        <div className="surface-card-strong p-5 flex flex-col">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5">
+              <button
+                onClick={() => setBreakdownMode('afdeling')}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${breakdownMode === 'afdeling' ? 'bg-white shadow text-dark' : 'text-slate-500 hover:text-dark'}`}
+              >
+                Afdeling
+              </button>
+              <button
+                onClick={() => setBreakdownMode('categorie')}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${breakdownMode === 'categorie' ? 'bg-white shadow text-dark' : 'text-slate-500 hover:text-dark'}`}
+              >
+                Categorie
+              </button>
+            </div>
             <div className="flex gap-1">
               {CATEGORY_PERIODS.map(p => (
                 <button
@@ -376,24 +535,34 @@ function DashboardPage() {
               ))}
             </div>
           </div>
-          {sortedCategories.length === 0 ? (
+          {breakdownRows.length === 0 ? (
             <p className="text-sm text-slate-400">Nog geen data.</p>
           ) : (
             <div className="space-y-3">
-              {sortedCategories.map(([cat, cost]) => (
-                <div key={cat}>
-                  <div className="flex justify-between text-xs text-slate-500 mb-1">
-                    <span>{cat}</span>
-                    <span className="font-medium text-dark">€{cost.toFixed(0)}</span>
+              {breakdownRows.map(([label, cost]) => {
+                const color = breakdownMode === 'afdeling'
+                  ? (deptColorMap[label] ?? '#F47920')
+                  : '#F47920';
+                return (
+                  <div key={label}>
+                    <div className="flex justify-between text-xs text-slate-500 mb-1">
+                      <span className="flex items-center gap-1.5">
+                        {breakdownMode === 'afdeling' && (
+                          <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                        )}
+                        {label}
+                      </span>
+                      <span className="font-medium text-dark">€{cost.toFixed(0)}</span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${(cost / maxCost) * 100}%`, backgroundColor: color }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-primary transition-all duration-500"
-                      style={{ width: `${(cost / maxCost) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -425,12 +594,80 @@ function DashboardPage() {
               >›</button>
             </div>
           </div>
-          <div className="flex items-center gap-4 text-xs text-slate-400">
-            <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 bg-primary rounded" />Historisch</span>
-            <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 bg-primary/40 rounded" />Prognose</span>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-4 text-xs text-slate-400">
+              <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 bg-primary rounded" />Historisch</span>
+              <span className="flex items-center gap-1.5">
+                <svg width="16" height="2" className="flex-shrink-0"><line x1="0" y1="1" x2="16" y2="1" stroke="#F47920" strokeWidth="2" strokeDasharray="3,2" strokeOpacity="0.5" /></svg>
+                Prognose
+              </span>
+            </div>
+            <button
+              onClick={handleToggleLegend}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${legendOpen ? 'bg-slate-800 text-white border-slate-800' : 'text-slate-400 border-slate-200 hover:border-slate-300 hover:text-slate-600'}`}
+            >
+              <span className="flex gap-0.5">
+                {DEPT_COLORS.slice(0, 3).map(c => <span key={c} className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: c }} />)}
+              </span>
+              Afdelingen
+            </button>
           </div>
         </div>
-        <LineChart data={selectedCashflow} currentMonth={selectedYear === currentYear ? currentMonth : (selectedYear < currentYear ? 11 : -1)} months={MONTHS} snapshots={snapshots} currentYear={selectedYear} globalMax={globalMax} />
+
+        {legendOpen && (
+          <div className="mb-3 p-3 bg-slate-50 rounded-xl flex flex-wrap gap-x-5 gap-y-2 items-center">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={allChecked}
+                onChange={toggleAll}
+                className="rounded border-gray-300 text-primary focus:ring-primary"
+              />
+              <span className="text-xs font-semibold text-slate-500">Alles</span>
+            </label>
+            <div className="w-px h-4 bg-slate-200" />
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={showTotalLine}
+                onChange={() => setShowTotalLine(v => !v)}
+                className="rounded border-gray-300 text-primary focus:ring-primary"
+              />
+              <span className="inline-block w-4 h-0.5 rounded bg-primary" />
+              <span className="text-xs text-slate-600 font-medium">Totaal</span>
+            </label>
+            {allDepts.map((dept) => {
+              const color = deptColorMap[dept];
+              const checked = effectiveVisibleDepts.has(dept);
+              return (
+                <label key={dept} className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleDept(dept)}
+                    className="rounded border-gray-300 focus:ring-primary"
+                    style={{ accentColor: color }}
+                  />
+                  <span className="inline-block w-4 h-0.5 rounded" style={{ backgroundColor: color }} />
+                  <span className="text-xs text-slate-600">{dept}</span>
+                </label>
+              );
+            })}
+          </div>
+        )}
+
+        <LineChart
+          data={selectedCashflow}
+          showTotal={showTotalLine}
+          currentMonth={selectedYear === currentYear ? currentMonth : (selectedYear < currentYear ? 11 : -1)}
+          months={MONTHS}
+          snapshots={snapshots}
+          currentYear={selectedYear}
+          chartMax={chartMax}
+          departmentData={departmentCashflow}
+          visibleDepts={effectiveVisibleDepts}
+          colorMap={deptColorMap}
+        />
       </div>
 
       {detailSub && (
@@ -447,8 +684,10 @@ function DashboardPage() {
           subscription={editingSub}
           categoryOptions={categories.map(c => c.name)}
           typeOptions={types.map(t => t.name)}
+          departmentOptions={settingDepartments.map(d => d.name)}
           onAddCategory={addCategory}
           onAddType={addType}
+          onAddDepartment={addDepartment}
           onSave={handleSave}
           onClose={() => setModalOpen(false)}
         />

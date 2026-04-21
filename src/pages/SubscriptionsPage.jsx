@@ -8,6 +8,86 @@ import { SubLogo } from '../components/SubLogo';
 import { addDays, isBefore } from 'date-fns';
 import { toMonthly } from '../lib/costUtils';
 
+const EXPORT_FIELDS = [
+  { key: 'name',         label: 'Naam',              getValue: s => s.name ?? '' },
+  { key: 'vendor',       label: 'Leverancier',        getValue: s => s.vendor ?? '' },
+  { key: 'category',     label: 'Categorie',          getValue: s => s.category ?? '' },
+  { key: 'type',         label: 'Type',               getValue: s => s.type ?? '' },
+  { key: 'department',   label: 'Afdeling',           getValue: s => s.department ?? '' },
+  { key: 'status',       label: 'Status',             getValue: s => s.status ?? '' },
+  { key: 'cost',         label: 'Kosten',             getValue: s => s.cost != null ? s.cost.toString().replace('.', ',') : '' },
+  { key: 'currency',     label: 'Valuta',             getValue: s => s.currency ?? 'EUR' },
+  { key: 'cost_period',  label: 'Facturatieperiode',  getValue: s => s.cost_period ?? '' },
+  { key: 'seats',        label: 'Seats',              getValue: s => s.seats ?? '' },
+  { key: 'cost_per_seat',label: 'Prijs per seat',     getValue: s => s.cost_per_seat ? 'Ja' : 'Nee' },
+  { key: 'start_date',   label: 'Startdatum',         getValue: s => s.start_date ? new Date(s.start_date).toLocaleDateString('nl-NL') : '' },
+  { key: 'end_date',     label: 'Einddatum',          getValue: s => s.end_date ? new Date(s.end_date).toLocaleDateString('nl-NL') : '' },
+  { key: 'renewal_date', label: 'Verlengingsdatum',   getValue: s => s.renewal_date ? new Date(s.renewal_date).toLocaleDateString('nl-NL') : '' },
+  { key: 'auto_renew',   label: 'Auto-verlenging',    getValue: s => s.auto_renew ? 'Ja' : 'Nee' },
+  { key: 'contact_name', label: 'Contactpersoon',     getValue: s => s.contact_name ?? '' },
+  { key: 'contact_email',label: 'Contact e-mail',     getValue: s => s.contact_email ?? '' },
+  { key: 'contact_phone',label: 'Contact telefoon',   getValue: s => s.contact_phone ?? '' },
+  { key: 'notes',        label: 'Notities',           getValue: s => s.notes ?? '' },
+];
+
+const DEFAULT_SELECTED = new Set(['name','vendor','category','type','department','status','cost','currency','cost_period','renewal_date']);
+
+function ExportModal({ count, onExport, onClose }) {
+  const [selected, setSelected] = useState(new Set(DEFAULT_SELECTED));
+
+  const toggle = (key) => setSelected(prev => {
+    const next = new Set(prev);
+    next.has(key) ? next.delete(key) : next.add(key);
+    return next;
+  });
+
+  const allSelected = selected.size === EXPORT_FIELDS.length;
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(EXPORT_FIELDS.map(f => f.key)));
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60">
+      <div className="surface-card-strong w-full max-w-md mx-4 p-6 space-y-5">
+        <div>
+          <h2 className="text-lg font-bold text-dark">CSV exporteren</h2>
+          <p className="text-sm text-slate-500 mt-0.5">Kies welke velden je wilt meenemen. {count} abonnement{count !== 1 ? 'en' : ''} wordt geëxporteerd.</p>
+        </div>
+
+        <div className="flex justify-between items-center">
+          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Velden</span>
+          <button onClick={toggleAll} className="text-xs text-primary hover:underline">
+            {allSelected ? 'Deselecteer alles' : 'Selecteer alles'}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+          {EXPORT_FIELDS.map(field => (
+            <label key={field.key} className="flex items-center gap-2 cursor-pointer group">
+              <input
+                type="checkbox"
+                checked={selected.has(field.key)}
+                onChange={() => toggle(field.key)}
+                className="rounded border-gray-300 text-primary focus:ring-primary"
+              />
+              <span className="text-sm text-slate-600 group-hover:text-dark transition-colors">{field.label}</span>
+            </label>
+          ))}
+        </div>
+
+        <div className="flex justify-end gap-3 pt-1">
+          <button onClick={onClose} className="btn-secondary">Annuleren</button>
+          <button
+            onClick={() => onExport(selected)}
+            disabled={selected.size === 0}
+            className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            ↓ Exporteren ({selected.size} velden)
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StatusBadge({ status }) {
   const styles = {
     actief:   'bg-green-50 text-green-700 ring-1 ring-green-200',
@@ -66,9 +146,14 @@ function SubRow({ sub, onView, showUrgency }) {
         </div>
       </td>
       <td className="px-5 py-3.5 hidden md:table-cell">
-        {sub.category
-          ? <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-xs font-medium">{sub.category}</span>
-          : <span className="text-slate-300 text-xs">—</span>}
+        <div className="flex flex-col gap-1">
+          {sub.category
+            ? <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-xs font-medium w-fit">{sub.category}</span>
+            : <span className="text-slate-300 text-xs">—</span>}
+          {sub.department && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-orange-50 text-orange-600 text-xs font-medium w-fit">{sub.department}</span>
+          )}
+        </div>
       </td>
       <td className="px-5 py-3.5 text-sm font-medium text-dark">
         <CostDisplay sub={sub} />
@@ -191,15 +276,17 @@ function Section({ title, rows, onView, showUrgency, accent }) {
 
 function SubscriptionsPage() {
   const { subscriptions, loading, addSubscription, updateSubscription, deleteSubscription } = useSubscriptions();
-  const { categories: settingCategories, types, addCategory, addType } = useSettings();
+  const { categories: settingCategories, types, departments: settingDepartments, addCategory, addType, addDepartment } = useSettings();
   const { isAdmin } = useCurrentUser();
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSub, setEditingSub] = useState(null);
   const [detailSub, setDetailSub] = useState(null);
   const [saveError, setSaveError] = useState(null);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
 
   const categories = settingCategories.length > 0
     ? settingCategories.map(c => c.name)
@@ -207,6 +294,9 @@ function SubscriptionsPage() {
   const typesList = types.length > 0
     ? types.map(t => t.name)
     : [...new Set(subscriptions.map(s => s.type).filter(Boolean))];
+  const departmentsList = settingDepartments.length > 0
+    ? settingDepartments.map(d => d.name)
+    : [...new Set(subscriptions.map(s => s.department).filter(Boolean))];
 
   const applyFilters = (list) => list.filter(sub => {
     const q = search.toLowerCase();
@@ -215,7 +305,8 @@ function SubscriptionsPage() {
       (sub.contact_name?.toLowerCase().includes(q));
     return matchSearch
       && (!categoryFilter || sub.category === categoryFilter)
-      && (!typeFilter || sub.type === typeFilter);
+      && (!typeFilter || sub.type === typeFilter)
+      && (!departmentFilter || sub.department === departmentFilter);
   });
 
   const now = new Date();
@@ -254,15 +345,12 @@ function SubscriptionsPage() {
     setModalOpen(false);
   };
 
-  const handleExportCSV = () => {
-    const headers = ['Naam','Leverancier','Categorie','Type','Kosten','Valuta','Periode','Verlengingsdatum','Status'];
-    const rows = filtered.map(sub => [
-      sub.name ?? '', sub.vendor ?? '', sub.category ?? '', sub.type ?? '',
-      sub.cost != null ? sub.cost.toString().replace('.', ',') : '',
-      sub.currency ?? 'EUR', sub.cost_period ?? '',
-      sub.renewal_date ? new Date(sub.renewal_date).toLocaleDateString('nl-NL') : '',
-      sub.status ?? '',
-    ].map(v => `"${String(v).replace(/"/g, '""')}"`));
+  const handleExportCSV = (selectedFields) => {
+    const fields = EXPORT_FIELDS.filter(f => selectedFields.has(f.key));
+    const headers = fields.map(f => f.label);
+    const rows = filtered.map(sub =>
+      fields.map(f => `"${String(f.getValue(sub)).replace(/"/g, '""')}"`)
+    );
     const csv = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -271,6 +359,7 @@ function SubscriptionsPage() {
     link.download = `abonnementen-${new Date().toLocaleDateString('nl-NL').replace(/\//g, '-')}.csv`;
     link.click();
     URL.revokeObjectURL(url);
+    setExportModalOpen(false);
   };
 
   if (loading) return <div className="p-6">Loading...</div>;
@@ -290,7 +379,7 @@ function SubscriptionsPage() {
           </p>
         </div>
         <div className="flex gap-2 items-start">
-          <button onClick={handleExportCSV} className="btn-secondary text-sm">↓ CSV</button>
+          <button onClick={() => setExportModalOpen(true)} className="btn-secondary text-sm">↓ CSV</button>
           {isAdmin && <button onClick={handleAdd} className="btn-primary text-sm">+ Nieuw abonnement</button>}
         </div>
       </div>
@@ -320,6 +409,14 @@ function SubscriptionsPage() {
           <option value="">Alle types</option>
           {typesList.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
+        <select
+          value={departmentFilter}
+          onChange={(e) => setDepartmentFilter(e.target.value)}
+          className="field-strong px-3 py-2 rounded-md border text-sm focus:outline-none"
+        >
+          <option value="">Alle afdelingen</option>
+          {departmentsList.map(d => <option key={d} value={d}>{d}</option>)}
+        </select>
       </div>
 
       {/* Sections */}
@@ -329,6 +426,14 @@ function SubscriptionsPage() {
       <Section title="Actief" rows={actief} onView={handleView} />
       <Section title="Verlopen" rows={verlopen} onView={handleView} />
       <Section title="Opgezegd" rows={opgezegd} onView={handleView} />
+
+      {exportModalOpen && (
+        <ExportModal
+          count={filtered.length}
+          onExport={handleExportCSV}
+          onClose={() => setExportModalOpen(false)}
+        />
+      )}
 
       {detailSub && (
         <SubscriptionDetailPanel
@@ -344,8 +449,10 @@ function SubscriptionsPage() {
           subscription={editingSub}
           categoryOptions={categories}
           typeOptions={typesList}
+          departmentOptions={departmentsList}
           onAddCategory={addCategory}
           onAddType={addType}
+          onAddDepartment={addDepartment}
           onSave={handleSave}
           onClose={() => { setModalOpen(false); setSaveError(null); }}
           saveError={saveError}

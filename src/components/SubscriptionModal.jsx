@@ -70,7 +70,7 @@ function AddableSelect({ label, value, options, onChange, onAdd, error, required
   );
 }
 
-function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [], onAddCategory, onAddType, onSave, onClose, saveError }) {
+function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [], departmentOptions = [], onAddCategory, onAddType, onAddDepartment, onSave, onClose, saveError }) {
   const [formData, setFormData] = useState({
     name: '',
     vendor: '',
@@ -79,6 +79,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
     contact_phone: '',
     category: '',
     type: '',
+    department: '',
     cost: '',
     currency: 'EUR',
     cost_period: '',
@@ -106,6 +107,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
         contact_phone: subscription.contact_phone || '',
         category: subscription.category || '',
         type: subscription.type || '',
+        department: subscription.department || '',
         cost: subscription.cost ?? '',
         currency: subscription.currency || 'EUR',
         cost_period: subscription.cost_period || '',
@@ -201,6 +203,8 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
       errors.category = 'Categorie is verplicht.';
     if (!formData.type)
       errors.type = 'Type is verplicht.';
+    if (!formData.department)
+      errors.department = 'Afdeling is verplicht.';
     if (formData.contact_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.contact_email))
       errors.contact_email = 'Voer een geldig e-mailadres in.';
     if (formData.cost !== '' && (isNaN(parseFloat(formData.cost)) || parseFloat(formData.cost) < 0))
@@ -215,6 +219,8 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
       errors.end_date = 'Einddatum mag niet vóór de startdatum liggen.';
     if (formData.renewal_date && isNaN(Date.parse(formData.renewal_date)))
       errors.renewal_date = 'Datum niet juist ingevoerd.';
+    if (formData.status === 'actief' && formData.end_date && new Date(formData.end_date) < new Date())
+      errors.status = 'Status kan niet actief zijn als de einddatum al verlopen is.';
     return errors;
   };
 
@@ -316,7 +322,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
                 onAdd={onAddCategory}
                 error={fieldErrors.category}
                 required
-                tooltip="Categorie geeft aan tot welk bedrijfsonderdeel of kostenpost een abonnement behoort. Voorbeelden: Software, Hardware, Marketing, HR."
+                tooltip="Categorie geeft aan tot welk bedrijfsonderdeel of kostenpost een abonnement behoort. Wordt gebruikt voor de kostengrafiek op het dashboard en voor filteren."
               />
               <AddableSelect
                 label="Type"
@@ -327,6 +333,16 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
                 error={fieldErrors.type}
                 required
                 tooltip="Type geeft aan op welke manier een abonnement wordt afgerekend. Voorbeelden: Licentie, Abonnement, Pay-per-use, Eenmalig."
+              />
+              <AddableSelect
+                label="Afdeling"
+                value={formData.department}
+                options={departmentOptions}
+                onChange={(val) => setFormData(prev => ({ ...prev, department: val }))}
+                onAdd={onAddDepartment}
+                error={fieldErrors.department}
+                required
+                tooltip="Afdeling is verplicht zodat kosten per afdeling correct worden bijgehouden. Voorbeelden: Facilitair, Sales, Finance, IT, HR. Gebruik 'Overig' voor abonnementen die niet onder een specifieke afdeling vallen."
               />
               <div>
                 <label className="block text-sm font-medium text-gray-700">Kosten</label>
@@ -404,12 +420,13 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
                   name="status"
                   value={formData.status}
                   onChange={handleChange}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                  className={`mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-primary focus:border-primary ${fieldErrors.status ? 'border-red-400' : 'border-gray-300'}`}
                 >
                   <option value="actief">Actief</option>
                   <option value="verlopen">Verlopen</option>
                   <option value="opgezegd">Opgezegd</option>
                 </select>
+                {fieldErrors.status && <p className="mt-1 text-xs text-red-600">{fieldErrors.status}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Startdatum</label>
