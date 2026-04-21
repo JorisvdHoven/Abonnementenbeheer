@@ -36,11 +36,12 @@ export function useDailySnapshot() {
 
     const details = subs.map(sub => {
       const factor = BILLING_FACTORS[sub.cost_period] ?? 1;
-      const monthly_equivalent = (sub.cost || 0) * factor;
+      const monthly_equivalent = (sub.cost || 0) * factor * (sub.cost_per_seat ? (sub.seats || 1) : 1);
       return {
         id: sub.id,
         name: sub.name,
         vendor: sub.vendor,
+        department: sub.department || null,
         cost: sub.cost,
         currency: sub.currency || 'EUR',
         cost_period: sub.cost_period,

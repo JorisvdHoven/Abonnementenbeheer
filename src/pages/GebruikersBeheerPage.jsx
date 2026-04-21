@@ -211,29 +211,29 @@ function GebruikersBeheerPage() {
                   </td>
                   <td className="px-5 py-3 text-right">
                     {isEditing ? (
-                      <div className="flex justify-end gap-3">
-                        <button onClick={cancelEdit} className="text-xs text-slate-500 hover:text-slate-700">
-                          Annuleren
-                        </button>
-                        <button
-                          onClick={() => saveEdit(u.id)}
-                          disabled={saving}
-                          className="text-xs text-primary font-semibold hover:underline"
-                        >
-                          {saving ? 'Opslaan...' : 'Opslaan'}
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex justify-end gap-3">
-                        <button onClick={() => startEdit(u)} className="text-xs text-primary hover:underline">
-                          Bewerken
-                        </button>
-                        {!isMe && (
+                      <div className="flex justify-between items-center w-full">
+                        {!isMe ? (
                           <button onClick={() => handleDelete(u.id)} className="text-xs text-red-400 hover:text-red-600">
                             Verwijder
                           </button>
-                        )}
+                        ) : <span />}
+                        <div className="flex gap-3">
+                          <button onClick={cancelEdit} className="text-xs text-slate-500 hover:text-slate-700">
+                            Annuleren
+                          </button>
+                          <button
+                            onClick={() => saveEdit(u.id)}
+                            disabled={saving}
+                            className="text-xs text-primary font-semibold hover:underline"
+                          >
+                            {saving ? 'Opslaan...' : 'Opslaan'}
+                          </button>
+                        </div>
                       </div>
+                    ) : (
+                      <button onClick={() => startEdit(u)} className="text-xs text-primary hover:underline">
+                        Bewerken
+                      </button>
                     )}
                   </td>
                 </tr>

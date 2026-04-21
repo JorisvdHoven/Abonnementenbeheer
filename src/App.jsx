@@ -7,24 +7,29 @@ import SubscriptionsPage from './pages/SubscriptionsPage';
 import EvaluatiePage from './pages/EvaluatiePage';
 import SettingsPage from './pages/SettingsPage';
 import GebruikersBeheerPage from './pages/GebruikersBeheerPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import Navbar from './components/Navbar';
 import { useDailySnapshot } from './hooks/useDailySnapshot';
 
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isRecovery, setIsRecovery] = useState(false);
   useDailySnapshot();
 
   useEffect(() => {
-    // Check initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
+        if (event === 'PASSWORD_RECOVERY') {
+          setIsRecovery(true);
+        } else if (event === 'SIGNED_OUT') {
+          setIsRecovery(false);
+        }
         setUser(session?.user ?? null);
         setLoading(false);
       }
@@ -39,7 +44,11 @@ function App() {
 
   return (
     <Router>
-      {user ? (
+      {isRecovery ? (
+        <Routes>
+          <Route path="*" element={<ResetPasswordPage />} />
+        </Routes>
+      ) : user ? (
         <div className="min-h-screen bg-transparent">
           <Navbar user={user} />
           <main className="max-w-7xl mx-auto w-full">
