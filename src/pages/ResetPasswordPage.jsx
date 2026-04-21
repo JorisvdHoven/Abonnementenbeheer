@@ -29,8 +29,8 @@ function ResetPasswordPage() {
       <div className="max-w-md w-full bg-slate-900/90 border border-white/10 shadow-2xl rounded-[2rem] p-8 backdrop-blur-xl">
         <div className="text-center mb-8">
           <div className="mx-auto h-14 w-14 rounded-3xl bg-primary flex items-center justify-center text-white text-xl font-bold shadow-lg">F</div>
-          <h2 className="mt-6 text-3xl font-semibold text-white">Nieuw wachtwoord</h2>
-          <p className="mt-3 text-sm text-slate-300">Kies een nieuw wachtwoord voor je account.</p>
+          <h2 className="mt-6 text-3xl font-semibold text-white">Welkom! Kies een wachtwoord</h2>
+          <p className="mt-3 text-sm text-slate-300">Stel een wachtwoord in om toegang te krijgen tot je account.</p>
         </div>
 
         {success ? (
