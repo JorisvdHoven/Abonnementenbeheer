@@ -443,7 +443,7 @@ function DashboardPage() {
       </div>
 
       {/* Middle row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:grid-rows-1" style={{ minHeight: '22rem' }}>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
 
         {/* Expiring soon */}
         <div className="surface-card-strong p-5 flex flex-col">
