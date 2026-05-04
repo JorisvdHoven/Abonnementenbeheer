@@ -56,6 +56,34 @@ function useAnimated(value, duration = 450) {
   return isArr ? animated : animated[0];
 }
 
+// Telt smooth op naar een nieuwe waarde — voor satisfying period switches.
+function AnimatedNumber({ value, format, duration = 700 }) {
+  const [display, setDisplay] = useState(value);
+  const fromRef = useRef(value);
+  const rafRef = useRef(null);
+
+  useEffect(() => {
+    const from = fromRef.current;
+    const to = value;
+    if (from === to) return;
+    const t0 = performance.now();
+    const tick = (now) => {
+      const t = Math.min((now - t0) / duration, 1);
+      const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      const next = from + (to - from) * ease;
+      fromRef.current = next;
+      setDisplay(next);
+      if (t < 1) rafRef.current = requestAnimationFrame(tick);
+      else fromRef.current = to;
+    };
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [value, duration]);
+
+  return <>{format ? format(display) : Math.round(display)}</>;
+}
+
 function LineChart({ data, showTotal = true, currentMonth, months, snapshots, currentYear, chartMax, departmentData, visibleDepts, colorMap = {} }) {
   const [activeIdx, setActiveIdx] = useState(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
@@ -592,6 +620,7 @@ function DashboardPage() {
               const color = breakdownMode === 'afdeling'
                 ? (deptColorMap[label] ?? '#F47920')
                 : '#F47920';
+              const widthPct = (cost / maxCost) * 100;
               return (
                 <div key={label}>
                   <div className="flex justify-between text-xs mb-1.5">
@@ -601,12 +630,18 @@ function DashboardPage() {
                       )}
                       <span className="font-medium">{label}</span>
                     </span>
-                    <span className="font-semibold text-slate-900 tabular-nums">{fmtEurNoDec(cost)}</span>
+                    <span className="font-semibold text-slate-900 tabular-nums">
+                      €<AnimatedNumber value={cost} format={(v) => Math.round(v).toLocaleString('nl-NL')} />
+                    </span>
                   </div>
                   <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
                     <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{ width: `${(cost / maxCost) * 100}%`, backgroundColor: color }}
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${widthPct}%`,
+                        backgroundColor: color,
+                        transition: 'width 700ms cubic-bezier(0.33, 1, 0.68, 1)',
+                      }}
                     />
                   </div>
                 </div>
