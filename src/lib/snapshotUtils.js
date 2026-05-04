@@ -32,11 +32,14 @@ export async function backfillSubscriptionSnapshots(supabase, sub) {
   const startYear = startDate.getFullYear();
   const startMonth = startDate.getMonth();
   const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth(); // huidige maand laten we over aan de cron
+  const currentMonth = now.getMonth();
 
+  // Loop t/m de huidige maand. pg_cron herschrijft 'm 's nachts toch naar dezelfde
+  // staat, maar tussen update en cron moet de snapshot direct correct zijn —
+  // anders mist de huidige maand de net-bijgewerkte sub.
   for (let y = startYear; y <= currentYear; y++) {
     const mStart = y === startYear ? startMonth : 0;
-    const mEnd = y === currentYear ? currentMonth - 1 : 11;
+    const mEnd = y === currentYear ? currentMonth : 11;
 
     for (let m = mStart; m <= mEnd; m++) {
       const { data: existing } = await supabase
