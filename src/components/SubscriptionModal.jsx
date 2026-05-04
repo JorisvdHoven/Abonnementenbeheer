@@ -5,6 +5,7 @@ import { currencySymbol } from '../lib/format';
 import { ChevronDownIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { SubLogo } from './SubLogo';
 import Modal from './Modal';
+import { recomputeSubscriptionSnapshots } from '../lib/snapshotUtils';
 
 // ============================================================
 // Layout primitives — modern, minimaal
@@ -460,11 +461,20 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
 
     const savedSub = result?.data ?? subscription;
     if (savedSub?.id) {
+      let accountsChanged = false;
       if (multiAccount) {
         await persistAccounts(savedSub.id);
+        accountsChanged = true;
       } else if (initialAccountsRef.current.length > 0) {
         // Toggle uitgezet → alle accounts verwijderen
         await supabase.from('subscription_accounts').delete().eq('subscription_id', savedSub.id);
+        accountsChanged = true;
+      }
+
+      // Snapshot opnieuw opbouwen met de actuele accounts staat — anders staan
+      // historische maanden + cashflow grafiek nog op de oude waardes.
+      if (accountsChanged) {
+        await recomputeSubscriptionSnapshots(supabase, savedSub.id);
       }
     }
   };

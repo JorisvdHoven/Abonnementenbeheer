@@ -10,7 +10,7 @@ import Modal from '../components/Modal';
 import BulkEditModal from '../components/BulkEditModal';
 import { toast } from '../lib/toast';
 import { addDays, isBefore } from 'date-fns';
-import { toMonthly, countActiveAccountsNow } from '../lib/costUtils';
+import { toMonthly, toEurMonthly, countActiveAccountsNow } from '../lib/costUtils';
 import { formatDate, formatDateLong, currencySymbol } from '../lib/format';
 
 const EXPORT_FIELDS = [
@@ -109,16 +109,21 @@ function StatusBadge({ status }) {
 }
 
 function CostDisplay({ sub }) {
-  if (!sub.cost) return <span className="text-slate-400">—</span>;
+  const hasAccounts = sub.accounts && sub.accounts.length > 0;
   const sym = currencySymbol(sub.currency);
+
   if (sub.cost_period === 'Eenmalig') {
+    if (!sub.cost) return <span className="text-slate-400">—</span>;
     return <span>{sym}{sub.cost} <span className="text-xs text-slate-400">eenmalig</span></span>;
   }
-  const monthly = toMonthly(sub.cost, sub.cost_period);
-  if (sub.cost_period === 'Maandelijks') return <span>{sym}{sub.cost}<span className="text-xs text-slate-400 ml-0.5">/mnd</span></span>;
+
+  // toEurMonthly geeft het maandtotaal in eigen valuta wanneer rates leeg is.
+  const monthly = toEurMonthly(sub, {});
+  if (!monthly) return <span className="text-slate-400">—</span>;
+
   return (
-    <span title={`${sym}${sub.cost} ${sub.cost_period}`}>
-      €{monthly.toFixed(2)}<span className="text-xs text-slate-400 ml-0.5">/mnd</span>
+    <span title={hasAccounts ? `${countActiveAccountsNow(sub.accounts)} actieve accounts` : `${sym}${sub.cost} ${sub.cost_period}`}>
+      {sym}{monthly.toFixed(2)}<span className="text-xs text-slate-400 ml-0.5">/mnd</span>
     </span>
   );
 }
