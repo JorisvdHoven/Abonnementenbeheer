@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSettings } from '../hooks/useSettings';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import { currencySymbol } from '../lib/format';
+
+const FOREIGN_CURRENCIES = ['USD', 'GBP', 'CHF'];
 
 function SettingsPage() {
   const {
@@ -9,7 +12,7 @@ function SettingsPage() {
     types,
     departments,
     loading,
-    exchangeRate,
+    exchangeRates,
     updateExchangeRate,
     addCategory,
     addType,
@@ -23,14 +26,16 @@ function SettingsPage() {
   const [newCategory, setNewCategory] = useState('');
   const [newType, setNewType] = useState('');
   const [newDepartment, setNewDepartment] = useState('');
-  const [rateInput, setRateInput] = useState(exchangeRate.toString());
-  const [rateSaved, setRateSaved] = useState(false);
+  const [rateInputs, setRateInputs] = useState(() =>
+    Object.fromEntries(FOREIGN_CURRENCIES.map(c => [c, (exchangeRates[c] ?? '').toString()]))
+  );
+  const [rateSavedFor, setRateSavedFor] = useState(null);
 
-  const handleSaveRate = (e) => {
+  const handleSaveRate = (currency) => (e) => {
     e.preventDefault();
-    updateExchangeRate(rateInput);
-    setRateSaved(true);
-    setTimeout(() => setRateSaved(false), 2000);
+    updateExchangeRate(currency, rateInputs[currency]);
+    setRateSavedFor(currency);
+    setTimeout(() => setRateSavedFor(null), 2000);
   };
 
   const handleAddCategory = async (e) => {
@@ -68,26 +73,30 @@ function SettingsPage() {
       ) : (
         <>
         <section className="surface-card-strong p-6">
-          <h2 className="text-lg font-semibold mb-1">Wisselkoers USD → EUR</h2>
-          <p className="text-sm text-slate-500 mb-4">Wordt gebruikt om USD-abonnementen om te rekenen naar EUR op het dashboard.</p>
-          {isAdmin ? (
-            <form onSubmit={handleSaveRate} className="flex gap-3 items-center">
-              <span className="text-sm text-slate-600">1 USD =</span>
-              <input
-                type="number"
-                step="0.0001"
-                min="0.01"
-                value={rateInput}
-                onChange={(e) => setRateInput(e.target.value)}
-                className="field-strong w-32 px-3 py-2 rounded-md focus:outline-none"
-              />
-              <span className="text-sm text-slate-600">EUR</span>
-              <button className="btn-primary">{rateSaved ? '✓ Opgeslagen' : 'Opslaan'}</button>
-            </form>
-          ) : (
-            <p className="text-sm text-slate-600">1 USD = {exchangeRate} EUR</p>
-          )}
-          {isAdmin && <p className="mt-2 text-xs text-slate-400">Huidige koers: 1 USD = {exchangeRate} EUR</p>}
+          <h2 className="text-lg font-semibold mb-1">Wisselkoersen</h2>
+          <p className="text-sm text-slate-500 mb-4">Worden gebruikt om abonnementen in vreemde valuta om te rekenen naar EUR op het dashboard.</p>
+          <div className="space-y-3">
+            {FOREIGN_CURRENCIES.map(currency => (
+              isAdmin ? (
+                <form key={currency} onSubmit={handleSaveRate(currency)} className="flex gap-3 items-center flex-wrap">
+                  <span className="text-sm text-slate-600 w-20">1 {currency} =</span>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    min="0.01"
+                    value={rateInputs[currency] ?? ''}
+                    onChange={(e) => setRateInputs(prev => ({ ...prev, [currency]: e.target.value }))}
+                    className="field-strong w-32 px-3 py-2 rounded-md focus:outline-none"
+                  />
+                  <span className="text-sm text-slate-600">EUR</span>
+                  <button className="btn-primary text-sm">{rateSavedFor === currency ? '✓ Opgeslagen' : 'Opslaan'}</button>
+                  <span className="text-xs text-slate-400 ml-auto">{currencySymbol(currency)} → €</span>
+                </form>
+              ) : (
+                <p key={currency} className="text-sm text-slate-600">1 {currency} = {exchangeRates[currency] ?? '?'} EUR</p>
+              )
+            ))}
+          </div>
         </section>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

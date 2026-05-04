@@ -11,7 +11,16 @@ export default {
         'primary-light': '#FFF3E8',
         dark: '#1A1A1A',
         neutral: '#F5F5F5'
-      }
+      },
+      keyframes: {
+        'slide-in': {
+          '0%': { transform: 'translateX(20px)', opacity: '0' },
+          '100%': { transform: 'translateX(0)', opacity: '1' },
+        },
+      },
+      animation: {
+        'slide-in': 'slide-in 0.2s ease-out',
+      },
     },
   },
   plugins: [],

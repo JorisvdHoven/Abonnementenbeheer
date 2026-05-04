@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useUsers } from '../hooks/useUsers';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import Modal from '../components/Modal';
 
 function RoleBadge({ role }) {
   return (
@@ -33,8 +34,8 @@ function InviteModal({ onClose, onInvite }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="surface-card-strong w-full max-w-md p-6 rounded-xl shadow-xl">
+    <Modal onClose={onClose} size="md" ariaLabel="Gebruiker uitnodigen">
+      <div className="p-6 rounded-xl shadow-xl">
         <h2 className="text-lg font-bold mb-4">Gebruiker uitnodigen</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -79,7 +80,7 @@ function InviteModal({ onClose, onInvite }) {
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 }
 

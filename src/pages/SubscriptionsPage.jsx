@@ -2,15 +2,19 @@ import { useState } from 'react';
 import { useSubscriptions } from '../hooks/useSubscriptions';
 import { useSettings } from '../hooks/useSettings';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import { useDebounce } from '../hooks/useDebounce';
 import SubscriptionModal from '../components/SubscriptionModal';
 import { SubscriptionDetailPanel } from '../components/SubscriptionDetailPanel';
 import { SubLogo } from '../components/SubLogo';
+import Modal from '../components/Modal';
 import { addDays, isBefore } from 'date-fns';
 import { toMonthly } from '../lib/costUtils';
+import { formatDate, formatDateLong, currencySymbol } from '../lib/format';
 
 const EXPORT_FIELDS = [
   { key: 'name',         label: 'Naam',              getValue: s => s.name ?? '' },
   { key: 'vendor',       label: 'Leverancier',        getValue: s => s.vendor ?? '' },
+  { key: 'account_owner',label: 'Account van',        getValue: s => s.account_owner ?? '' },
   { key: 'category',     label: 'Categorie',          getValue: s => s.category ?? '' },
   { key: 'type',         label: 'Type',               getValue: s => s.type ?? '' },
   { key: 'department',   label: 'Afdeling',           getValue: s => s.department ?? '' },
@@ -20,9 +24,9 @@ const EXPORT_FIELDS = [
   { key: 'cost_period',  label: 'Facturatieperiode',  getValue: s => s.cost_period ?? '' },
   { key: 'seats',        label: 'Seats',              getValue: s => s.seats ?? '' },
   { key: 'cost_per_seat',label: 'Prijs per seat',     getValue: s => s.cost_per_seat ? 'Ja' : 'Nee' },
-  { key: 'start_date',   label: 'Startdatum',         getValue: s => s.start_date ? new Date(s.start_date).toLocaleDateString('nl-NL') : '' },
-  { key: 'end_date',     label: 'Einddatum',          getValue: s => s.end_date ? new Date(s.end_date).toLocaleDateString('nl-NL') : '' },
-  { key: 'renewal_date', label: 'Verlengingsdatum',   getValue: s => s.renewal_date ? new Date(s.renewal_date).toLocaleDateString('nl-NL') : '' },
+  { key: 'start_date',   label: 'Startdatum',         getValue: s => formatDate(s.start_date) },
+  { key: 'end_date',     label: 'Einddatum',          getValue: s => formatDate(s.end_date) },
+  { key: 'renewal_date', label: 'Verlengingsdatum',   getValue: s => formatDate(s.renewal_date) },
   { key: 'auto_renew',   label: 'Auto-verlenging',    getValue: s => s.auto_renew ? 'Ja' : 'Nee' },
   { key: 'contact_name', label: 'Contactpersoon',     getValue: s => s.contact_name ?? '' },
   { key: 'contact_email',label: 'Contact e-mail',     getValue: s => s.contact_email ?? '' },
@@ -30,7 +34,7 @@ const EXPORT_FIELDS = [
   { key: 'notes',        label: 'Notities',           getValue: s => s.notes ?? '' },
 ];
 
-const DEFAULT_SELECTED = new Set(['name','vendor','category','type','department','status','cost','currency','cost_period','renewal_date']);
+const DEFAULT_SELECTED = new Set(['name','vendor','account_owner','category','type','department','status','cost','currency','cost_period','renewal_date']);
 
 function ExportModal({ count, onExport, onClose }) {
   const [selected, setSelected] = useState(new Set(DEFAULT_SELECTED));
@@ -45,8 +49,8 @@ function ExportModal({ count, onExport, onClose }) {
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(EXPORT_FIELDS.map(f => f.key)));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60">
-      <div className="surface-card-strong w-full max-w-md mx-4 p-6 space-y-5">
+    <Modal onClose={onClose} size="md" ariaLabel="CSV exporteren">
+      <div className="p-6 space-y-5">
         <div>
           <h2 className="text-lg font-bold text-dark">CSV exporteren</h2>
           <p className="text-sm text-slate-500 mt-0.5">Kies welke velden je wilt meenemen. {count} abonnement{count !== 1 ? 'en' : ''} wordt geëxporteerd.</p>
@@ -84,7 +88,7 @@ function ExportModal({ count, onExport, onClose }) {
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -104,7 +108,7 @@ function StatusBadge({ status }) {
 
 function CostDisplay({ sub }) {
   if (!sub.cost) return <span className="text-slate-400">—</span>;
-  const sym = sub.currency === 'USD' ? '$' : '€';
+  const sym = currencySymbol(sub.currency);
   if (sub.cost_period === 'Eenmalig') {
     return <span>{sym}{sub.cost} <span className="text-xs text-slate-400">eenmalig</span></span>;
   }
@@ -128,20 +132,38 @@ function DaysLeft({ date, urgent }) {
   );
 }
 
-function SubRow({ sub, onView, showUrgency }) {
+function SubRow({ sub, onView, showUrgency, isSelectable, isSelected, onToggleSelect }) {
   const renewalDate = sub.renewal_date || sub.end_date;
   const isUrgent = showUrgency && renewalDate;
   return (
     <tr
       onClick={() => onView(sub)}
-      className="group cursor-pointer border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors duration-100"
+      className={`group cursor-pointer border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors duration-100 ${isSelected ? 'bg-primary/5' : ''}`}
     >
+      {isSelectable && (
+        <td className="pl-5 py-3.5 w-10" onClick={(e) => { e.stopPropagation(); onToggleSelect(sub.id); }}>
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => onToggleSelect(sub.id)}
+            onClick={(e) => e.stopPropagation()}
+            className="rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+            aria-label={`Selecteer ${sub.name}`}
+          />
+        </td>
+      )}
       <td className="px-5 py-3.5">
         <div className="flex items-center gap-3">
           <SubLogo vendor={sub.vendor} name={sub.name} />
           <div>
             <p className="font-semibold text-dark text-sm">{sub.name}</p>
-            {sub.vendor && <p className="text-xs text-slate-400 mt-0.5">{sub.vendor}</p>}
+            {(sub.vendor || sub.account_owner) && (
+              <p className="text-xs text-slate-400 mt-0.5">
+                {sub.vendor}
+                {sub.vendor && sub.account_owner && <span className="mx-1">·</span>}
+                {sub.account_owner && <span className="text-slate-500">{sub.account_owner}</span>}
+              </p>
+            )}
           </div>
         </div>
       </td>
@@ -161,7 +183,7 @@ function SubRow({ sub, onView, showUrgency }) {
       <td className="px-5 py-3.5 hidden lg:table-cell">
         {renewalDate ? (
           <div className="flex items-center gap-2">
-            <span className="text-sm text-slate-600">{new Date(renewalDate).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+            <span className="text-sm text-slate-600">{formatDateLong(renewalDate)}</span>
             {isUrgent && <DaysLeft date={renewalDate} urgent={true} />}
           </div>
         ) : (
@@ -188,7 +210,7 @@ const COLUMNS = [
   { key: 'status',       label: 'Status',          className: 'hidden sm:table-cell' },
 ];
 
-function Section({ title, rows, onView, showUrgency, accent }) {
+function Section({ title, rows, onView, showUrgency, accent, isSelectable, selected, onToggleSelect, onToggleAll }) {
   const [open, setOpen] = useState(true);
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
@@ -237,6 +259,7 @@ function Section({ title, rows, onView, showUrgency, accent }) {
           ) : (
             <table className="w-full text-sm table-fixed">
               <colgroup>
+                {isSelectable && <col style={{ width: '40px' }} />}
                 <col style={{ width: '30%' }} />
                 <col className="hidden md:table-column" style={{ width: '18%' }} />
                 <col style={{ width: '16%' }} />
@@ -246,6 +269,17 @@ function Section({ title, rows, onView, showUrgency, accent }) {
               </colgroup>
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/60">
+                  {isSelectable && (
+                    <th className="pl-5 py-2.5">
+                      <input
+                        type="checkbox"
+                        checked={rows.length > 0 && rows.every(r => selected.has(r.id))}
+                        onChange={() => onToggleAll(rows.map(r => r.id))}
+                        className="rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                        aria-label="Alles in deze sectie selecteren"
+                      />
+                    </th>
+                  )}
                   {COLUMNS.map(col => (
                     <th
                       key={col.key}
@@ -263,7 +297,15 @@ function Section({ title, rows, onView, showUrgency, accent }) {
               </thead>
               <tbody>
                 {sorted.map(sub => (
-                  <SubRow key={sub.id} sub={sub} onView={onView} showUrgency={showUrgency} />
+                  <SubRow
+                    key={sub.id}
+                    sub={sub}
+                    onView={onView}
+                    showUrgency={showUrgency}
+                    isSelectable={isSelectable}
+                    isSelected={selected?.has(sub.id) ?? false}
+                    onToggleSelect={onToggleSelect}
+                  />
                 ))}
               </tbody>
             </table>
@@ -279,6 +321,7 @@ function SubscriptionsPage() {
   const { categories: settingCategories, types, departments: settingDepartments, addCategory, addType, addDepartment } = useSettings();
   const { isAdmin } = useCurrentUser();
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 250);
   const [categoryFilter, setCategoryFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
@@ -287,6 +330,37 @@ function SubscriptionsPage() {
   const [detailSub, setDetailSub] = useState(null);
   const [saveError, setSaveError] = useState(null);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [selected, setSelected] = useState(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const toggleSelect = (id) => setSelected(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
+  const toggleSelectMany = (ids) => setSelected(prev => {
+    const allSelected = ids.length > 0 && ids.every(id => prev.has(id));
+    const next = new Set(prev);
+    if (allSelected) ids.forEach(id => next.delete(id));
+    else ids.forEach(id => next.add(id));
+    return next;
+  });
+
+  const clearSelection = () => setSelected(new Set());
+
+  const handleBulkDelete = async () => {
+    setBulkDeleting(true);
+    const ids = [...selected];
+    for (const id of ids) {
+      // eslint-disable-next-line no-await-in-loop
+      await deleteSubscription(id);
+    }
+    setBulkDeleting(false);
+    setBulkDeleteOpen(false);
+    clearSelection();
+  };
 
   const categories = settingCategories.length > 0
     ? settingCategories.map(c => c.name)
@@ -299,10 +373,11 @@ function SubscriptionsPage() {
     : [...new Set(subscriptions.map(s => s.department).filter(Boolean))];
 
   const applyFilters = (list) => list.filter(sub => {
-    const q = search.toLowerCase();
+    const q = debouncedSearch.toLowerCase();
     const matchSearch = sub.name.toLowerCase().includes(q) ||
       (sub.vendor?.toLowerCase().includes(q)) ||
-      (sub.contact_name?.toLowerCase().includes(q));
+      (sub.contact_name?.toLowerCase().includes(q)) ||
+      (sub.account_owner?.toLowerCase().includes(q));
     return matchSearch
       && (!categoryFilter || sub.category === categoryFilter)
       && (!typeFilter || sub.type === typeFilter)
@@ -356,7 +431,7 @@ function SubscriptionsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `abonnementen-${new Date().toLocaleDateString('nl-NL').replace(/\//g, '-')}.csv`;
+    link.download = `abonnementen-${formatDate(new Date()).replace(/\//g, '-')}.csv`;
     link.click();
     URL.revokeObjectURL(url);
     setExportModalOpen(false);
@@ -420,12 +495,31 @@ function SubscriptionsPage() {
       </div>
 
       {/* Sections */}
-      {expiringSoon.length > 0 && (
-        <Section title="Verloopt binnenkort" rows={expiringSoon} onView={handleView} showUrgency accent="orange" />
+      {subscriptions.length === 0 ? (
+        <div className="surface-card-strong p-12 text-center">
+          <div className="mx-auto h-16 w-16 rounded-3xl bg-primary/10 flex items-center justify-center text-primary text-3xl mb-4">+</div>
+          <h2 className="text-lg font-semibold text-dark">Nog geen abonnementen</h2>
+          <p className="text-sm text-slate-500 mt-2 max-w-md mx-auto">
+            Voeg je eerste abonnement toe om kosten in beeld te krijgen, evaluaties te beheren en verlopingsdatums te volgen.
+          </p>
+          {isAdmin && (
+            <button onClick={handleAdd} className="btn-primary text-sm mt-5">+ Eerste abonnement toevoegen</button>
+          )}
+        </div>
+      ) : (
+        <>
+          {expiringSoon.length > 0 && (
+            <Section title="Verloopt binnenkort" rows={expiringSoon} onView={handleView} showUrgency accent="orange"
+              isSelectable={isAdmin} selected={selected} onToggleSelect={toggleSelect} onToggleAll={toggleSelectMany} />
+          )}
+          <Section title="Actief" rows={actief} onView={handleView}
+            isSelectable={isAdmin} selected={selected} onToggleSelect={toggleSelect} onToggleAll={toggleSelectMany} />
+          <Section title="Verlopen" rows={verlopen} onView={handleView}
+            isSelectable={isAdmin} selected={selected} onToggleSelect={toggleSelect} onToggleAll={toggleSelectMany} />
+          <Section title="Opgezegd" rows={opgezegd} onView={handleView}
+            isSelectable={isAdmin} selected={selected} onToggleSelect={toggleSelect} onToggleAll={toggleSelectMany} />
+        </>
       )}
-      <Section title="Actief" rows={actief} onView={handleView} />
-      <Section title="Verlopen" rows={verlopen} onView={handleView} />
-      <Section title="Opgezegd" rows={opgezegd} onView={handleView} />
 
       {exportModalOpen && (
         <ExportModal
@@ -457,6 +551,54 @@ function SubscriptionsPage() {
           onClose={() => { setModalOpen(false); setSaveError(null); }}
           saveError={saveError}
         />
+      )}
+
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 surface-card-strong shadow-2xl rounded-full px-5 py-3 flex items-center gap-3 border-2 border-primary/20">
+          <span className="text-sm font-medium text-dark">{selected.size} geselecteerd</span>
+          <span className="w-px h-5 bg-slate-200" />
+          <button
+            onClick={() => setBulkDeleteOpen(true)}
+            className="text-sm font-medium text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-full transition-colors"
+          >
+            Verwijderen
+          </button>
+          <button
+            onClick={clearSelection}
+            className="text-sm text-slate-500 hover:text-dark px-3 py-1.5 rounded-full transition-colors"
+          >
+            Annuleren
+          </button>
+        </div>
+      )}
+
+      {bulkDeleteOpen && (
+        <Modal onClose={() => !bulkDeleting && setBulkDeleteOpen(false)} size="md" ariaLabel="Bulkverwijdering bevestigen">
+          <div className="p-6 space-y-4">
+            <h2 className="text-lg font-bold text-dark">Abonnementen verwijderen?</h2>
+            <p className="text-sm text-slate-600">
+              Je staat op het punt <strong>{selected.size} abonnement{selected.size !== 1 ? 'en' : ''}</strong> te verwijderen.
+              Dit kan niet ongedaan gemaakt worden.
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setBulkDeleteOpen(false)}
+                disabled={bulkDeleting}
+                className="btn-secondary"
+              >
+                Annuleren
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting}
+                className="rounded-md bg-red-500 hover:bg-red-600 text-white px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50"
+              >
+                {bulkDeleting ? 'Verwijderen...' : `Ja, verwijder ${selected.size}`}
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

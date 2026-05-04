@@ -1,21 +1,31 @@
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import { supabase } from './lib/supabaseClient';
 import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage';
-import SubscriptionsPage from './pages/SubscriptionsPage';
-import EvaluatiePage from './pages/EvaluatiePage';
-import SettingsPage from './pages/SettingsPage';
-import GebruikersBeheerPage from './pages/GebruikersBeheerPage';
-import ResetPasswordPage from './pages/ResetPasswordPage';
 import Navbar from './components/Navbar';
-import { useDailySnapshot } from './hooks/useDailySnapshot';
+import Toaster from './components/Toaster';
+
+// Lazy-loaded routes — eerste paint sneller, andere pagina's worden on-demand geladen
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const SubscriptionsPage = lazy(() => import('./pages/SubscriptionsPage'));
+const EvaluatiePage = lazy(() => import('./pages/EvaluatiePage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const GebruikersBeheerPage = lazy(() => import('./pages/GebruikersBeheerPage'));
+const ActiviteitPage = lazy(() => import('./pages/ActiviteitPage'));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
+
+function PageLoader() {
+  return (
+    <div className="flex justify-center items-center py-20 text-slate-400 text-sm">
+      Laden...
+    </div>
+  );
+}
 
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isRecovery, setIsRecovery] = useState(false);
-  useDailySnapshot();
 
   useEffect(() => {
     // Detect invite en password recovery flow vanuit URL hash
@@ -49,22 +59,28 @@ function App() {
 
   return (
     <Router>
+      <Toaster />
       {isRecovery ? (
-        <Routes>
-          <Route path="*" element={<ResetPasswordPage />} />
-        </Routes>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="*" element={<ResetPasswordPage />} />
+          </Routes>
+        </Suspense>
       ) : user ? (
         <div className="min-h-screen bg-transparent">
           <Navbar user={user} />
           <main className="max-w-7xl mx-auto w-full">
-            <Routes>
-              <Route path="/dashboard" element={<DashboardPage />} />
-              <Route path="/subscriptions" element={<SubscriptionsPage />} />
-              <Route path="/evaluatie" element={<EvaluatiePage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/gebruikers" element={<GebruikersBeheerPage />} />
-              <Route path="*" element={<Navigate to="/dashboard" />} />
-            </Routes>
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
+                <Route path="/dashboard" element={<DashboardPage />} />
+                <Route path="/subscriptions" element={<SubscriptionsPage />} />
+                <Route path="/evaluatie" element={<EvaluatiePage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/gebruikers" element={<GebruikersBeheerPage />} />
+                <Route path="/activiteit" element={<ActiviteitPage />} />
+                <Route path="*" element={<Navigate to="/dashboard" />} />
+              </Routes>
+            </Suspense>
           </main>
         </div>
       ) : (

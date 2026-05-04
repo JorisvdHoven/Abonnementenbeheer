@@ -2,17 +2,15 @@ import { useState, useRef, useEffect } from 'react';
 import { useMonthlySnapshots } from '../hooks/useMonthlySnapshots';
 import { useSubscriptions } from '../hooks/useSubscriptions';
 import { useEvaluaties } from '../hooks/useEvaluaties';
-import { useNotifications } from '../hooks/useNotifications';
 import { useSettings } from '../hooks/useSettings';
 import { format, addDays, isBefore } from 'date-fns';
 import { SubLogo } from '../components/SubLogo';
-import { toMonthly, toYearly } from '../lib/costUtils';
+import { toEurMonthly as calcEurMonthly } from '../lib/costUtils';
 import { SubscriptionDetailPanel } from '../components/SubscriptionDetailPanel';
 import SubscriptionModal from '../components/SubscriptionModal';
 import {
   CreditCardIcon,
   BanknotesIcon,
-  ClockIcon,
   ClipboardDocumentCheckIcon,
   CalendarDaysIcon,
 } from '@heroicons/react/24/outline';
@@ -222,8 +220,7 @@ function DashboardPage() {
   const { subscriptions, loading: subsLoading, updateSubscription, deleteSubscription } = useSubscriptions();
   const { snapshots } = useMonthlySnapshots();
   const { evaluaties, loading: evalLoading } = useEvaluaties();
-  const { notifications } = useNotifications();
-  const { exchangeRate, categories, types, departments: settingDepartments, addCategory, addType, addDepartment } = useSettings();
+  const { exchangeRates, categories, types, departments: settingDepartments, addCategory, addType, addDepartment } = useSettings();
   const [detailSub, setDetailSub] = useState(null);
   const [editingSub, setEditingSub] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -247,7 +244,7 @@ function DashboardPage() {
     setModalOpen(false);
   };
 
-  const toEurMonthly = (sub) => toMonthly(sub.cost || 0, sub.cost_period) * (sub.cost_per_seat ? (sub.seats || 1) : 1) * (sub.currency === 'USD' ? exchangeRate : 1);
+  const toEurMonthly = (sub) => calcEurMonthly(sub, exchangeRates);
 
   const isActiveInMonth = (sub, year, month) => {
     const monthStart = new Date(year, month, 1);
@@ -261,7 +258,9 @@ function DashboardPage() {
   const activeSubs = subscriptions.filter(s => s.status === 'actief');
   const totalMonthlyCost = activeSubs.reduce((sum, s) => sum + toEurMonthly(s), 0);
   const totalYearlyCost = totalMonthlyCost * 12;
-  const hasUsdSubs = activeSubs.some(s => s.currency === 'USD');
+  const foreignCurrencies = [...new Set(activeSubs.map(s => s.currency).filter(c => c && c !== 'EUR'))];
+  const hasForeignCurrency = foreignCurrencies.length > 0;
+  const ratesLabel = foreignCurrencies.map(c => `${c} ${exchangeRates[c] ?? '?'}`).join(', ');
 
   const now = new Date();
   const sixtyDays = addDays(now, 60);
@@ -285,22 +284,6 @@ function DashboardPage() {
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth();
   const MONTHS = ['Jan','Feb','Mrt','Apr','Mei','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
-
-  const monthlyCashflow = Array(12).fill(0).map((_, m) => {
-    // Gebruik snapshot als die beschikbaar is voor die maand
-    const snapshot = snapshots.find(s => s.year === currentYear && s.month === m);
-    if (snapshot) return snapshot.total_cost;
-
-    // Toekomstige maanden én huidige maand zonder snapshot: bereken uit huidige abonnementen
-    if (m >= currentMonth) {
-      return activeSubs
-        .filter(sub => isActiveInMonth(sub, currentYear, m))
-        .reduce((sum, sub) => sum + toEurMonthly(sub), 0);
-    }
-
-    return 0;
-  });
-  const maxCashflow = Math.max(...monthlyCashflow, 1);
 
   const minYear = Math.min(...snapshots.map(s => s.year), currentYear);
   const visibleYears = [windowStart, windowStart + 1, windowStart + 2];
@@ -407,6 +390,22 @@ function DashboardPage() {
     .filter(({ ev }) => ev && ev.usage_pct <= 30)
     .sort((a, b) => a.ev.usage_pct - b.ev.usage_pct);
 
+  if (subscriptions.length === 0) {
+    return (
+      <div className="p-6 space-y-6">
+        <h1 className="text-2xl font-bold text-dark">Dashboard</h1>
+        <div className="surface-card-strong p-12 text-center">
+          <div className="mx-auto h-16 w-16 rounded-3xl bg-primary/10 flex items-center justify-center text-primary text-3xl mb-4">📊</div>
+          <h2 className="text-lg font-semibold text-dark">Welkom bij Flexurity Abonnementenbeheer</h2>
+          <p className="text-sm text-slate-500 mt-2 max-w-md mx-auto">
+            Voeg je eerste abonnement toe en je dashboard wordt automatisch gevuld met kosten-, gebruiks- en verlopingsinzichten.
+          </p>
+          <a href="#/subscriptions" className="btn-primary text-sm mt-5 inline-block">→ Naar Abonnementen</a>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold text-dark">Dashboard</h1>
@@ -423,14 +422,14 @@ function DashboardPage() {
           icon={BanknotesIcon}
           label="Maandkosten"
           value={`€${totalMonthlyCost.toFixed(2)}`}
-          sub={hasUsdSubs ? `incl. USD (koers ${exchangeRate})` : null}
+          sub={hasForeignCurrency ? `incl. ${ratesLabel}` : null}
           accent="orange"
         />
         <StatCard
           icon={CalendarDaysIcon}
           label="Jaarkosten"
           value={`€${totalYearlyCost.toFixed(0)}`}
-          sub={hasUsdSubs ? `incl. USD (koers ${exchangeRate})` : null}
+          sub={hasForeignCurrency ? `incl. ${ratesLabel}` : null}
           accent="green"
         />
         <StatCard

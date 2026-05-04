@@ -5,6 +5,7 @@ import { useCurrentUser } from '../hooks/useCurrentUser';
 import EvaluatieModal from '../components/EvaluatieModal';
 import { SubscriptionDetailPanel } from '../components/SubscriptionDetailPanel';
 import { SubLogo } from '../components/SubLogo';
+import { formatDateLong } from '../lib/format';
 
 function UsageBar({ pct }) {
   const hue = Math.round(pct * 1.2);
@@ -20,8 +21,6 @@ function UsageBar({ pct }) {
 }
 
 function EvalCard({ sub, ev, isAdmin, onDetail, onEdit, onDelete, accent }) {
-  const formatDate = (iso) => new Date(iso).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' });
-
   return (
     <div className={`surface-card-strong flex flex-col gap-3 p-4 ${accent === 'orange' ? 'border-l-4 border-orange-400' : ''}`}>
       <div
@@ -44,7 +43,7 @@ function EvalCard({ sub, ev, isAdmin, onDetail, onEdit, onDelete, accent }) {
             {ev.note
               ? <p className="text-xs text-slate-500 italic truncate">"{ev.note}"</p>
               : <div className="h-4" />}
-            <p className={`text-xs ${accent === 'orange' ? 'text-orange-400' : 'text-slate-400'}`}>{formatDate(ev.updated_at)}</p>
+            <p className={`text-xs ${accent === 'orange' ? 'text-orange-400' : 'text-slate-400'}`}>{formatDateLong(ev.updated_at)}</p>
           </>
         ) : (
           <p className="text-xs text-slate-400">Nog niet geëvalueerd</p>

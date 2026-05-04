@@ -2,7 +2,9 @@ import { useEffect } from 'react';
 import { XMarkIcon, PencilSquareIcon, TrashIcon, DocumentArrowDownIcon } from '@heroicons/react/24/outline';
 import { SubLogo } from './SubLogo';
 import { toMonthly } from '../lib/costUtils';
+import { formatDate, formatDateLong, currencySymbol } from '../lib/format';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import { useLatestAuditFor } from '../hooks/useAuditLog';
 
 function DetailRow({ label, value }) {
   const empty = value === null || value === undefined || value === '';
@@ -27,6 +29,7 @@ function Section({ title, children }) {
 
 export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
   const { isAdmin } = useCurrentUser();
+  const latestAudit = useLatestAuditFor('subscription', sub?.id);
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -75,6 +78,7 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-3">
           <Section title="Abonnement">
+            <DetailRow label="Account van" value={sub.account_owner} />
             <DetailRow label="Categorie" value={sub.category} />
             <DetailRow label="Type" value={sub.type} />
             <DetailRow label="Afdeling" value={sub.department} />
@@ -82,7 +86,7 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
           </Section>
 
           <Section title="Kosten">
-            <DetailRow label="Kosten" value={`${sub.currency === 'USD' ? '$' : '€'}${sub.cost}${sub.cost_period ? ` (${sub.cost_period})` : ''}${sub.cost_per_seat ? ` × ${sub.seats || 1} seats` : ''}`} />
+            <DetailRow label="Kosten" value={`${currencySymbol(sub.currency)}${sub.cost}${sub.cost_period ? ` (${sub.cost_period})` : ''}${sub.cost_per_seat ? ` × ${sub.seats || 1} seats` : ''}`} />
             {monthly !== null && sub.cost_period !== 'Maandelijks' && (
               <DetailRow label="Per maand" value={`€${(monthly * (sub.cost_per_seat ? (sub.seats || 1) : 1)).toFixed(2)}`} />
             )}
@@ -92,9 +96,9 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
           </Section>
 
           <Section title="Datums">
-            <DetailRow label="Startdatum" value={sub.start_date ? new Date(sub.start_date).toLocaleDateString('nl-NL') : null} />
-            <DetailRow label="Einddatum" value={sub.end_date ? new Date(sub.end_date).toLocaleDateString('nl-NL') : null} />
-            <DetailRow label="Verlengingsdatum" value={sub.renewal_date ? new Date(sub.renewal_date).toLocaleDateString('nl-NL') : null} />
+            <DetailRow label="Startdatum" value={sub.start_date ? formatDate(sub.start_date) : null} />
+            <DetailRow label="Einddatum" value={sub.end_date ? formatDate(sub.end_date) : null} />
+            <DetailRow label="Verlengingsdatum" value={sub.renewal_date ? formatDate(sub.renewal_date) : null} />
             <DetailRow label="Auto-verlenging" value={sub.auto_renew === true ? 'Ja' : sub.auto_renew === false ? 'Nee' : null} />
           </Section>
 
@@ -120,6 +124,12 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
               : <p className="text-sm text-slate-300 italic">Niet ingevuld</p>
             }
           </Section>
+
+          {latestAudit && (
+            <p className="text-xs text-slate-400 text-center pt-2">
+              Laatst {latestAudit.action === 'insert' ? 'aangemaakt' : 'gewijzigd'} door <span className="font-medium text-slate-500">{latestAudit.user_email || 'onbekend'}</span> op {formatDateLong(latestAudit.created_at)}
+            </p>
+          )}
         </div>
 
         {/* Footer */}

@@ -1,14 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import Modal from './Modal';
 
 function EvaluatieModal({ subscription, existing, onSave, onClose }) {
   const [usagePct, setUsagePct] = useState(existing?.usage_pct ?? 50);
   const [note, setNote] = useState(existing?.note ?? '');
-
-  useEffect(() => {
-    const handleKey = (e) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [onClose]);
 
   const hue = Math.round(usagePct * 1.2);
   const color = `hsl(${hue}, 85%, 45%)`;
@@ -19,9 +14,8 @@ function EvaluatieModal({ subscription, existing, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60">
-      <div className="surface-card-strong max-w-md w-full mx-4">
-        <div className="p-6">
+    <Modal onClose={onClose} size="md" ariaLabel={existing ? 'Evaluatie bewerken' : 'Evaluatie toevoegen'}>
+      <div className="p-6">
           <h2 className="text-xl font-bold mb-1">{existing ? 'Evaluatie bewerken' : 'Evaluatie toevoegen'}</h2>
           <p className="text-sm text-slate-500 mb-5">{subscription.name}</p>
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -68,8 +62,7 @@ function EvaluatieModal({ subscription, existing, onSave, onClose }) {
             </div>
           </form>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { BILLING_PERIODS, toMonthly } from '../lib/costUtils';
+import { currencySymbol } from '../lib/format';
 import { SubLogo } from './SubLogo';
+import Modal from './Modal';
 
 function AddableSelect({ label, value, options, onChange, onAdd, error, required, tooltip }) {
   const [adding, setAdding] = useState(false);
@@ -74,6 +76,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
   const [formData, setFormData] = useState({
     name: '',
     vendor: '',
+    account_owner: '',
     contact_name: '',
     contact_email: '',
     contact_phone: '',
@@ -102,6 +105,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
       setFormData({
         name: subscription.name || '',
         vendor: subscription.vendor || '',
+        account_owner: subscription.account_owner || '',
         contact_name: subscription.contact_name || '',
         contact_email: subscription.contact_email || '',
         contact_phone: subscription.contact_phone || '',
@@ -189,12 +193,6 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
     return () => clearTimeout(t);
   }, [formData.vendor]);
 
-  useEffect(() => {
-    const handleKey = (e) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [onClose]);
-
   const validate = () => {
     const errors = {};
     if (!formData.name.trim())
@@ -245,9 +243,8 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60">
-      <div className="surface-card-strong max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
+    <Modal onClose={onClose} size="2xl" scrollable ariaLabel={subscription ? 'Abonnement bewerken' : 'Nieuw abonnement'}>
+      <div className="p-6">
           <div className="flex items-center gap-4 mb-5">
             {(debouncedVendor || debouncedName) && (
               <SubLogo vendor={debouncedVendor} name={debouncedName} size="xl" />
@@ -279,6 +276,25 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
                   name="vendor"
                   value={formData.vendor}
                   onChange={handleChange}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <label className="block text-sm font-medium text-gray-700">Account van</label>
+                  <div className="relative group mb-0.5">
+                    <span className="flex items-center justify-center w-4 h-4 rounded-full bg-slate-300 text-white text-xs font-bold cursor-default select-none">i</span>
+                    <span className="absolute left-6 top-1/2 -translate-y-1/2 z-10 hidden group-hover:block w-64 rounded-md bg-slate-800 text-white text-xs p-3 shadow-lg font-normal">
+                      De interne medewerker bij wie dit account hoort. Handig als meerdere collega's hetzelfde soort account hebben (bijv. OpenAI). Optioneel.
+                    </span>
+                  </div>
+                </div>
+                <input
+                  type="text"
+                  name="account_owner"
+                  value={formData.account_owner}
+                  onChange={handleChange}
+                  placeholder="Bijv. Joris van den Hoven"
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
                 />
               </div>
@@ -353,6 +369,8 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
                   >
                     <option value="EUR">€ EUR</option>
                     <option value="USD">$ USD</option>
+                    <option value="GBP">£ GBP</option>
+                    <option value="CHF">Fr. CHF</option>
                   </select>
                   <input
                     type="number"
@@ -380,7 +398,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
                 </select>
                 {formData.cost_period && formData.cost_period !== 'Maandelijks' && formData.cost_period !== 'Eenmalig' && formData.cost !== '' && (
                   <p className="mt-1 text-xs text-slate-500">
-                    ≈ {formData.currency === 'USD' ? '$' : '€'}{(toMonthly(parseFloat(formData.cost), formData.cost_period) * (formData.cost_per_seat ? (parseInt(formData.seats) || 1) : 1)).toFixed(2)} per maand{formData.cost_per_seat && parseInt(formData.seats) > 1 ? ` (${formData.seats} seats)` : ''}
+                    ≈ {currencySymbol(formData.currency)}{(toMonthly(parseFloat(formData.cost), formData.cost_period) * (formData.cost_per_seat ? (parseInt(formData.seats) || 1) : 1)).toFixed(2)} per maand{formData.cost_per_seat && parseInt(formData.seats) > 1 ? ` (${formData.seats} seats)` : ''}
                   </p>
                 )}
               </div>
@@ -554,8 +572,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
             </div>
           </form>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

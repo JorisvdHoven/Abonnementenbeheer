@@ -2,6 +2,8 @@ import { Link, useLocation } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useNotifications } from '../hooks/useNotifications';
+import { useCurrentUser } from '../hooks/useCurrentUser';
+import { formatDate } from '../lib/format';
 import { BellIcon, XMarkIcon, ArrowRightStartOnRectangleIcon } from '@heroicons/react/24/outline';
 
 const LINKS = [
@@ -11,9 +13,14 @@ const LINKS = [
   { to: '/settings',      label: 'Instellingen' },
 ];
 
+const ADMIN_LINKS = [
+  { to: '/activiteit',    label: 'Activiteit' },
+];
+
 function Navbar({ user }) {
   const location = useLocation();
   const { notifications, dismissNotification } = useNotifications();
+  const { isAdmin } = useCurrentUser();
   const [displayName, setDisplayName] = useState(user.email);
   const [bellOpen, setBellOpen] = useState(false);
   const bellRef = useRef(null);
@@ -39,9 +46,11 @@ function Navbar({ user }) {
 
         {/* Left: logo + links */}
         <div className="flex items-center gap-6">
-          <span className="text-base font-bold text-white tracking-tight">Flexurity</span>
+          <Link to="/dashboard" className="flex items-center">
+            <img src="/flexurity-logo-white.svg" alt="Flexurity" className="h-7 w-auto" />
+          </Link>
           <div className="hidden sm:flex items-center gap-1">
-            {LINKS.map(({ to, label }) => (
+            {[...LINKS, ...(isAdmin ? ADMIN_LINKS : [])].map(({ to, label }) => (
               <Link
                 key={to}
                 to={to}
@@ -89,9 +98,9 @@ function Navbar({ user }) {
                         <div>
                           <p className="text-sm font-medium text-slate-700">{sub.name}</p>
                           {sub._type === 'verlopen' ? (
-                            <p className="text-xs text-red-500 mt-0.5">Verlopen op {new Date(sub.end_date || sub.renewal_date).toLocaleDateString('nl-NL')}</p>
+                            <p className="text-xs text-red-500 mt-0.5">Verlopen op {formatDate(sub.end_date || sub.renewal_date)}</p>
                           ) : (
-                            <p className="text-xs text-slate-400 mt-0.5">Verloopt op {new Date(sub.renewal_date || sub.end_date).toLocaleDateString('nl-NL')}</p>
+                            <p className="text-xs text-slate-400 mt-0.5">Verloopt op {formatDate(sub.renewal_date || sub.end_date)}</p>
                           )}
                         </div>
                         <button onClick={() => dismissNotification(sub.id)} className="ml-2 text-slate-300 hover:text-slate-500 flex-shrink-0">

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { backfillSubscriptionSnapshots, removeSubscriptionFromSnapshots } from '../lib/snapshotUtils';
+import { toast } from '../lib/toast';
 
 export function useSubscriptions() {
   const [subscriptions, setSubscriptions] = useState([]);
@@ -18,15 +19,11 @@ export function useSubscriptions() {
 
     if (error) {
       console.error('Error fetching subscriptions:', error);
+      toast.error('Abonnementen konden niet geladen worden.');
     } else {
       setSubscriptions(data);
     }
     setLoading(false);
-  };
-
-  const getUserId = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    return user?.id;
   };
 
   const addSubscription = async (subscription) => {
@@ -37,15 +34,16 @@ export function useSubscriptions() {
 
     if (error) {
       console.error('Error adding subscription:', error);
+      toast.error(`Toevoegen mislukt: ${error.message}`);
       return { error };
     }
 
     const saved = data[0];
     setSubscriptions(prev => [saved, ...prev]);
+    toast.success(`${saved.name} toegevoegd.`);
 
     // Backfill historische snapshots als de startdatum in het verleden ligt
-    const userId = await getUserId();
-    if (userId) await backfillSubscriptionSnapshots(supabase, saved, userId);
+    await backfillSubscriptionSnapshots(supabase, saved);
 
     return { data: saved };
   };
@@ -59,25 +57,22 @@ export function useSubscriptions() {
 
     if (error) {
       console.error('Error updating subscription:', error);
+      toast.error(`Opslaan mislukt: ${error.message}`);
       return { error };
     }
 
     const saved = data[0];
     setSubscriptions(prev => prev.map(sub => sub.id === id ? saved : sub));
+    toast.success('Wijzigingen opgeslagen.');
 
     // Herbereken snapshots als startdatum of kosten gewijzigd zijn
-    const userId = await getUserId();
-    if (userId) {
-      await removeSubscriptionFromSnapshots(supabase, id, userId);
-      await backfillSubscriptionSnapshots(supabase, saved, userId);
-    }
+    await removeSubscriptionFromSnapshots(supabase, id);
+    await backfillSubscriptionSnapshots(supabase, saved);
 
     return { data: saved };
   };
 
   const deleteSubscription = async (id) => {
-    const userId = await getUserId();
-
     const { error } = await supabase
       .from('subscriptions')
       .delete()
@@ -85,9 +80,11 @@ export function useSubscriptions() {
 
     if (error) {
       console.error('Error deleting subscription:', error);
+      toast.error(`Verwijderen mislukt: ${error.message}`);
     } else {
       setSubscriptions(prev => prev.filter(sub => sub.id !== id));
-      if (userId) await removeSubscriptionFromSnapshots(supabase, id, userId);
+      await removeSubscriptionFromSnapshots(supabase, id);
+      toast.success('Abonnement verwijderd.');
     }
   };
 

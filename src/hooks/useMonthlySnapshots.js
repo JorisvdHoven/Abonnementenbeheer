@@ -10,13 +10,9 @@ export function useMonthlySnapshots() {
   }, []);
 
   const fetchSnapshots = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
     const { data, error } = await supabase
       .from('monthly_snapshots')
       .select('*')
-      .eq('user_id', user.id)
       .order('year', { ascending: true })
       .order('month', { ascending: true });
 

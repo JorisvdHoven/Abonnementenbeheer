@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { toast } from '../lib/toast';
 
 export function useUsers() {
   const [users, setUsers] = useState([]);
@@ -20,7 +21,12 @@ export function useUsers() {
 
   const updateUser = async (id, updates) => {
     const { error } = await supabase.from('profiles').update(updates).eq('id', id);
-    if (!error) await fetchUsers();
+    if (error) {
+      toast.error(`Gebruiker bijwerken mislukt: ${error.message}`);
+    } else {
+      toast.success('Gebruiker bijgewerkt.');
+      await fetchUsers();
+    }
     return { error };
   };
 
@@ -35,7 +41,12 @@ export function useUsers() {
       body: JSON.stringify({ email, full_name, role }),
     });
     const result = await res.json();
-    if (res.ok) await fetchUsers();
+    if (res.ok) {
+      toast.success(`Uitnodiging verstuurd naar ${email}.`);
+      await fetchUsers();
+    } else {
+      toast.error(`Uitnodigen mislukt: ${result.error || 'onbekende fout'}`);
+    }
     return result;
   };
 
@@ -50,7 +61,12 @@ export function useUsers() {
       body: JSON.stringify({ user_id }),
     });
     const result = await res.json();
-    if (res.ok) await fetchUsers();
+    if (res.ok) {
+      toast.success('Gebruiker verwijderd.');
+      await fetchUsers();
+    } else {
+      toast.error(`Verwijderen mislukt: ${result.error || 'onbekende fout'}`);
+    }
     return result;
   };
 

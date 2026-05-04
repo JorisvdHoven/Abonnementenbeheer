@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { toast } from '../lib/toast';
 
 export function useEvaluaties() {
   const [evaluaties, setEvaluaties] = useState([]);
@@ -38,13 +39,14 @@ export function useEvaluaties() {
         .from('evaluations')
         .update({ usage_pct, note, updated_by: user.id, updated_at: new Date().toISOString() })
         .eq('id', existing.id);
-      if (error) { console.error(error); return; }
+      if (error) { console.error(error); toast.error(`Evaluatie opslaan mislukt: ${error.message}`); return; }
     } else {
       const { error } = await supabase
         .from('evaluations')
         .insert([{ subscription_id: subscriptionId, usage_pct, note, updated_by: user.id }]);
-      if (error) { console.error(error); return; }
+      if (error) { console.error(error); toast.error(`Evaluatie opslaan mislukt: ${error.message}`); return; }
     }
+    toast.success('Evaluatie opgeslagen.');
     await fetchEvaluaties();
   };
 
@@ -52,7 +54,8 @@ export function useEvaluaties() {
     const existing = evaluaties.find(e => e.subscription_id === subscriptionId);
     if (!existing) return;
     const { error } = await supabase.from('evaluations').delete().eq('id', existing.id);
-    if (error) { console.error(error); return; }
+    if (error) { console.error(error); toast.error(`Evaluatie verwijderen mislukt: ${error.message}`); return; }
+    toast.success('Evaluatie verwijderd.');
     await fetchEvaluaties();
   };
 

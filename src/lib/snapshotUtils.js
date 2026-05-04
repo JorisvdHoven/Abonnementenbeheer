@@ -5,7 +5,10 @@ const BILLING_FACTORS = {
   'Eenmalig':     0,
 };
 
-export async function backfillSubscriptionSnapshots(supabase, sub, userId) {
+// Backfill een net toegevoegd/aangepast abonnement in de org-wide monthly_snapshots
+// voor alle maanden van start_date tot en met vorige maand. Huidige maand wordt
+// door de pg_cron functie afgehandeld.
+export async function backfillSubscriptionSnapshots(supabase, sub) {
   if (!sub.start_date || !sub.cost_period || sub.cost_period === 'Eenmalig') return;
 
   const startDate = new Date(sub.start_date);
@@ -13,7 +16,7 @@ export async function backfillSubscriptionSnapshots(supabase, sub, userId) {
   if (startDate >= now) return;
 
   const factor = BILLING_FACTORS[sub.cost_period] ?? 1;
-  const monthlyEquivalent = (sub.cost || 0) * factor;
+  const monthlyEquivalent = (sub.cost || 0) * factor * (sub.cost_per_seat ? (sub.seats || 1) : 1);
 
   const subDetail = {
     id: sub.id,
@@ -39,25 +42,23 @@ export async function backfillSubscriptionSnapshots(supabase, sub, userId) {
       const { data: existing } = await supabase
         .from('monthly_snapshots')
         .select('*')
-        .eq('user_id', userId)
         .eq('year', y)
         .eq('month', m)
         .maybeSingle();
 
       if (existing) {
         const details = existing.details || [];
-        if (details.some(d => d.id === sub.id)) continue; // al verwerkt
-
-        const newDetails = [...details, subDetail];
-        const newTotal = existing.total_cost + monthlyEquivalent;
+        // Als sub al bestaat: vervang met huidige waarden (bijv. als cost is gewijzigd)
+        const filtered = details.filter(d => d.id !== sub.id);
+        const newDetails = [...filtered, subDetail];
+        const newTotal = newDetails.reduce((sum, d) => sum + (d.monthly_equivalent || 0), 0);
 
         await supabase.from('monthly_snapshots').upsert(
-          { user_id: userId, year: y, month: m, total_cost: newTotal, details: newDetails },
-          { onConflict: 'user_id,year,month' }
+          { year: y, month: m, total_cost: newTotal, details: newDetails },
+          { onConflict: 'year,month' }
         );
       } else {
         await supabase.from('monthly_snapshots').insert({
-          user_id: userId,
           year: y,
           month: m,
           total_cost: monthlyEquivalent,
@@ -68,11 +69,11 @@ export async function backfillSubscriptionSnapshots(supabase, sub, userId) {
   }
 }
 
-export async function removeSubscriptionFromSnapshots(supabase, subId, userId) {
+// Verwijder een abonnement uit alle org-wide snapshots waarin het voorkomt
+export async function removeSubscriptionFromSnapshots(supabase, subId) {
   const { data: snapshots } = await supabase
     .from('monthly_snapshots')
-    .select('*')
-    .eq('user_id', userId);
+    .select('*');
 
   if (!snapshots?.length) return;
 
@@ -83,8 +84,8 @@ export async function removeSubscriptionFromSnapshots(supabase, subId, userId) {
     const newTotal = newDetails.reduce((sum, d) => sum + (d.monthly_equivalent || 0), 0);
 
     await supabase.from('monthly_snapshots').upsert(
-      { user_id: snap.user_id, year: snap.year, month: snap.month, total_cost: newTotal, details: newDetails },
-      { onConflict: 'user_id,year,month' }
+      { year: snap.year, month: snap.month, total_cost: newTotal, details: newDetails },
+      { onConflict: 'year,month' }
     );
   }
 }
