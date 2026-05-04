@@ -142,9 +142,9 @@ function AddableSelect({ label, value, options, onChange, onAdd, error, required
 // Accounts manager — inline list met add/remove
 // ============================================================
 
-function AccountsManager({ accounts, onChange, costPerAccount, currency, period }) {
+function AccountsManager({ accounts, onChange, defaultCost, currency, period }) {
   const addAccount = () => {
-    onChange([...accounts, { _tempId: crypto.randomUUID(), owner_name: '', start_date: '', end_date: '' }]);
+    onChange([...accounts, { _tempId: crypto.randomUUID(), owner_name: '', start_date: '', end_date: '', cost: '' }]);
   };
 
   const updateAccount = (idx, patch) => {
@@ -156,14 +156,19 @@ function AccountsManager({ accounts, onChange, costPerAccount, currency, period 
   };
 
   const sym = currencySymbol(currency);
-  const monthlyPerAccount = toMonthly(parseFloat(costPerAccount) || 0, period);
+  const totalMonthly = accounts.reduce((sum, a) => {
+    const cost = a.cost !== '' && a.cost !== null && a.cost !== undefined
+      ? parseFloat(a.cost) || 0
+      : parseFloat(defaultCost) || 0;
+    return sum + toMonthly(cost, period);
+  }, 0);
 
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50/50 overflow-hidden">
       <div className="px-3.5 py-2.5 bg-slate-100/70 flex items-center justify-between text-xs">
         <span className="font-medium text-slate-600">{accounts.length} account{accounts.length !== 1 ? 's' : ''}</span>
-        {monthlyPerAccount > 0 && (
-          <span className="text-slate-500">≈ {sym}{monthlyPerAccount.toFixed(2)} per account/mnd</span>
+        {totalMonthly > 0 && (
+          <span className="text-slate-500">≈ {sym}{totalMonthly.toFixed(2)} totaal/mnd</span>
         )}
       </div>
       {accounts.length === 0 ? (
@@ -178,43 +183,61 @@ function AccountsManager({ accounts, onChange, costPerAccount, currency, period 
         <>
           <div className="divide-y divide-slate-200">
             {accounts.map((account, idx) => (
-              <div key={account.id ?? account._tempId ?? idx} className="p-3 grid grid-cols-1 sm:grid-cols-[1fr,140px,140px,auto] gap-2 items-end">
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Naam medewerker</label>
-                  <input
-                    type="text"
-                    value={account.owner_name || ''}
-                    onChange={(e) => updateAccount(idx, { owner_name: e.target.value })}
-                    placeholder="Bijv. Joris van den Hoven"
-                    className={inputClass}
-                  />
+              <div key={account.id ?? account._tempId ?? idx} className="p-3 space-y-2">
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr,140px,140px,auto] gap-2 items-end">
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Naam medewerker</label>
+                    <input
+                      type="text"
+                      value={account.owner_name || ''}
+                      onChange={(e) => updateAccount(idx, { owner_name: e.target.value })}
+                      placeholder="Bijv. Joris van den Hoven"
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Startdatum</label>
+                    <input
+                      type="date"
+                      value={account.start_date || ''}
+                      onChange={(e) => updateAccount(idx, { start_date: e.target.value })}
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Einddatum</label>
+                    <input
+                      type="date"
+                      value={account.end_date || ''}
+                      onChange={(e) => updateAccount(idx, { end_date: e.target.value })}
+                      className={inputClass}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeAccount(idx)}
+                    className="h-9 w-9 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                    aria-label="Account verwijderen"
+                  >
+                    <TrashIcon className="h-4 w-4" />
+                  </button>
                 </div>
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Startdatum</label>
-                  <input
-                    type="date"
-                    value={account.start_date || ''}
-                    onChange={(e) => updateAccount(idx, { start_date: e.target.value })}
-                    className={inputClass}
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr,140px,140px,auto] gap-2">
+                  <div className="sm:col-start-1 sm:col-span-3 flex items-center gap-2">
+                    <label className="text-xs text-slate-500 whitespace-nowrap">Eigen prijs (optioneel)</label>
+                    <div className="flex flex-1 max-w-[200px]">
+                      <span className="px-2.5 py-1.5 border border-slate-200 border-r-0 rounded-l-md bg-slate-100 text-xs text-slate-500 flex items-center">{sym}</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={account.cost ?? ''}
+                        onChange={(e) => updateAccount(idx, { cost: e.target.value })}
+                        placeholder={defaultCost ? `${defaultCost} (standaard)` : 'standaard'}
+                        className="block w-full px-2.5 py-1.5 rounded-r-md border border-slate-200 text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Einddatum</label>
-                  <input
-                    type="date"
-                    value={account.end_date || ''}
-                    onChange={(e) => updateAccount(idx, { end_date: e.target.value })}
-                    className={inputClass}
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeAccount(idx)}
-                  className="h-9 w-9 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
-                  aria-label="Account verwijderen"
-                >
-                  <TrashIcon className="h-4 w-4" />
-                </button>
               </div>
             ))}
           </div>
@@ -290,6 +313,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
           owner_name: a.owner_name || '',
           start_date: a.start_date ? a.start_date.split('T')[0] : '',
           end_date: a.end_date ? a.end_date.split('T')[0] : '',
+          cost: a.cost ?? '',
         }));
         setAccounts(formatted);
         initialAccountsRef.current = formatted;
@@ -375,6 +399,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
       owner_name: a.owner_name || null,
       start_date: a.start_date || null,
       end_date: a.end_date || null,
+      cost: a.cost === '' || a.cost === null || a.cost === undefined ? null : parseFloat(a.cost),
     }));
     if (toInsert.length > 0) {
       await supabase.from('subscription_accounts').insert(toInsert);
@@ -385,13 +410,19 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
       if (!a.id) continue;
       const orig = initial.find(o => o.id === a.id);
       if (!orig) continue;
-      const changed = orig.owner_name !== a.owner_name || orig.start_date !== a.start_date || orig.end_date !== a.end_date;
+      const newCost = a.cost === '' || a.cost === null || a.cost === undefined ? null : parseFloat(a.cost);
+      const origCost = orig.cost === '' || orig.cost === null || orig.cost === undefined ? null : parseFloat(orig.cost);
+      const changed = orig.owner_name !== a.owner_name
+        || orig.start_date !== a.start_date
+        || orig.end_date !== a.end_date
+        || origCost !== newCost;
       if (changed) {
         // eslint-disable-next-line no-await-in-loop
         await supabase.from('subscription_accounts').update({
           owner_name: a.owner_name || null,
           start_date: a.start_date || null,
           end_date: a.end_date || null,
+          cost: newCost,
           updated_at: new Date().toISOString(),
         }).eq('id', a.id);
       }
@@ -438,20 +469,26 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
   };
 
   const monthlyPreview = (() => {
-    const baseMonthly = toMonthly(parseFloat(formData.cost) || 0, formData.cost_period);
-    if (!baseMonthly) return null;
     if (multiAccount) {
-      const activeNow = accounts.filter(a => {
-        const today = new Date();
+      const today = new Date();
+      const activeAccounts = accounts.filter(a => {
         const start = a.start_date ? new Date(a.start_date) : null;
         const end = a.end_date ? new Date(a.end_date) : null;
         if (start && start > today) return false;
         if (end && end < today) return false;
         return true;
-      }).length;
-      if (activeNow === 0) return null;
-      return baseMonthly * activeNow;
+      });
+      if (activeAccounts.length === 0) return null;
+      const totalCost = activeAccounts.reduce((sum, a) => {
+        const c = a.cost !== '' && a.cost !== null && a.cost !== undefined
+          ? parseFloat(a.cost) || 0
+          : parseFloat(formData.cost) || 0;
+        return sum + c;
+      }, 0);
+      return toMonthly(totalCost, formData.cost_period);
     }
+    const baseMonthly = toMonthly(parseFloat(formData.cost) || 0, formData.cost_period);
+    if (!baseMonthly) return null;
     const seats = parseInt(formData.seats) || 1;
     return baseMonthly * (formData.cost_per_seat ? seats : 1);
   })();
@@ -508,7 +545,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
         {/* Kosten & facturatie */}
         <Section label="Kosten & facturatie">
           <FieldGrid>
-            <Field label={multiAccount ? 'Kosten per account' : 'Kosten'} value={formData.cost} error={fieldErrors.cost}>
+            <Field label={multiAccount ? 'Standaardprijs per account' : 'Kosten'} value={formData.cost} error={fieldErrors.cost} hint={multiAccount ? 'Wordt gebruikt als geen eigen prijs is ingevuld bij een account.' : undefined}>
               <div className="flex">
                 <select name="currency" value={formData.currency} onChange={handleChange} className="px-2 py-2 border border-slate-200 border-r-0 rounded-l-md bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
                   <option value="EUR">€ EUR</option>
@@ -553,7 +590,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
             <AccountsManager
               accounts={accounts}
               onChange={setAccounts}
-              costPerAccount={formData.cost}
+              defaultCost={formData.cost}
               currency={formData.currency}
               period={formData.cost_period}
             />

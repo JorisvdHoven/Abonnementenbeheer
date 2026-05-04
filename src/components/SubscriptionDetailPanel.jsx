@@ -39,15 +39,35 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
 
   if (!sub) return null;
 
-  const monthly = sub.cost_period && sub.cost_period !== 'Eenmalig'
-    ? toMonthly(sub.cost, sub.cost_period)
-    : null;
-
   const hasAccounts = sub.accounts && sub.accounts.length > 0;
   const activeAccountCount = hasAccounts ? countActiveAccountsNow(sub.accounts) : 0;
-  const multiplier = hasAccounts
-    ? activeAccountCount
-    : (sub.cost_per_seat ? (sub.seats || 1) : 1);
+
+  // Voor multi-account: som van actieve account-prijzen (met fallback op sub.cost)
+  // Voor legacy: cost × seats
+  let perPeriodTotal = parseFloat(sub.cost) || 0;
+  if (hasAccounts) {
+    const today = new Date();
+    perPeriodTotal = sub.accounts
+      .filter(a => {
+        const start = a.start_date ? new Date(a.start_date) : null;
+        const end = a.end_date ? new Date(a.end_date) : null;
+        if (start && start > today) return false;
+        if (end && end < today) return false;
+        return true;
+      })
+      .reduce((sum, a) => {
+        const c = a.cost !== null && a.cost !== undefined && a.cost !== ''
+          ? parseFloat(a.cost) || 0
+          : parseFloat(sub.cost) || 0;
+        return sum + c;
+      }, 0);
+  } else if (sub.cost_per_seat) {
+    perPeriodTotal *= (sub.seats || 1);
+  }
+
+  const monthly = sub.cost_period && sub.cost_period !== 'Eenmalig'
+    ? toMonthly(perPeriodTotal, sub.cost_period)
+    : null;
 
   const statusColors = {
     actief:   'bg-green-100 text-green-700',
@@ -105,6 +125,10 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
                   const isFuture = start && start > today;
                   const stateLabel = isActive ? 'Actief' : isFuture ? 'Toekomstig' : 'Beëindigd';
                   const stateColor = isActive ? 'bg-green-100 text-green-700' : isFuture ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500';
+                  const accountCost = acc.cost !== null && acc.cost !== undefined && acc.cost !== ''
+                    ? parseFloat(acc.cost)
+                    : null;
+                  const isCustomPrice = accountCost !== null && accountCost !== parseFloat(sub.cost);
                   return (
                     <div key={acc.id} className="flex items-center justify-between py-1.5 border-b border-slate-100 last:border-0">
                       <div className="min-w-0 flex-1">
@@ -113,6 +137,9 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
                           {acc.start_date ? formatDate(acc.start_date) : '?'}
                           {' → '}
                           {acc.end_date ? formatDate(acc.end_date) : '∞'}
+                          {isCustomPrice && (
+                            <span className="ml-2 text-slate-500">· {currencySymbol(sub.currency)}{accountCost.toFixed(2)}</span>
+                          )}
                         </p>
                       </div>
                       <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${stateColor}`}>{stateLabel}</span>
@@ -124,17 +151,22 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
           )}
 
           <Section title="Kosten">
-            <DetailRow
-              label="Kosten"
-              value={`${currencySymbol(sub.currency)}${sub.cost}${sub.cost_period ? ` (${sub.cost_period})` : ''}${
-                hasAccounts ? ` × ${activeAccountCount} accounts` : sub.cost_per_seat ? ` × ${sub.seats || 1} seats` : ''
-              }`}
-            />
+            {hasAccounts ? (
+              <DetailRow
+                label="Totaal per periode"
+                value={`${currencySymbol(sub.currency)}${perPeriodTotal.toFixed(2)}${sub.cost_period ? ` (${sub.cost_period})` : ''} · ${activeAccountCount} actieve account${activeAccountCount !== 1 ? 's' : ''}`}
+              />
+            ) : (
+              <DetailRow
+                label="Kosten"
+                value={`${currencySymbol(sub.currency)}${sub.cost}${sub.cost_period ? ` (${sub.cost_period})` : ''}${sub.cost_per_seat ? ` × ${sub.seats || 1} seats` : ''}`}
+              />
+            )}
             {monthly !== null && sub.cost_period !== 'Maandelijks' && (
-              <DetailRow label="Per maand" value={`€${(monthly * multiplier).toFixed(2)}`} />
+              <DetailRow label="Per maand" value={`${currencySymbol(sub.currency)}${monthly.toFixed(2)}`} />
             )}
             {monthly !== null && (
-              <DetailRow label="Per jaar" value={`€${(monthly * multiplier * 12).toFixed(2)}`} />
+              <DetailRow label="Per jaar" value={`${currencySymbol(sub.currency)}${(monthly * 12).toFixed(2)}`} />
             )}
           </Section>
 
