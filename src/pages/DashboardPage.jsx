@@ -9,10 +9,9 @@ import { toEurMonthly as calcEurMonthly } from '../lib/costUtils';
 import { SubscriptionDetailPanel } from '../components/SubscriptionDetailPanel';
 import SubscriptionModal from '../components/SubscriptionModal';
 import {
-  CreditCardIcon,
-  BanknotesIcon,
-  ClipboardDocumentCheckIcon,
-  CalendarDaysIcon,
+  ArrowTrendingUpIcon,
+  ArrowTrendingDownIcon,
+  ChevronRightIcon,
 } from '@heroicons/react/24/outline';
 
 const DEPT_COLORS = [
@@ -195,22 +194,60 @@ function LineChart({ data, showTotal = true, currentMonth, months, snapshots, cu
   );
 }
 
-function StatCard({ icon: Icon, label, value, sub, accent }) {
+// Modern, sleek metric card — Linear/Vercel-inspired
+function MetricCard({ label, value, hint, trend, large = false, children }) {
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200/70 p-5 flex flex-col">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+      <div className="mt-2 flex items-baseline gap-2">
+        <p className={`font-bold text-slate-900 tabular-nums leading-none ${large ? 'text-4xl' : 'text-2xl'}`}>{value}</p>
+        {trend}
+      </div>
+      {hint && <p className={`text-xs text-slate-400 ${large ? 'mt-2' : 'mt-1'}`}>{hint}</p>}
+      {children}
+    </div>
+  );
+}
+
+// Trend pill — voor cashflow geldt: omhoog = duurder = rood, omlaag = goedkoper = groen
+function TrendBadge({ change, invertColor = false }) {
+  if (change === null || change === undefined || !isFinite(change)) return null;
+  const positive = change > 0.5;
+  const negative = change < -0.5;
+  const Icon = positive ? ArrowTrendingUpIcon : negative ? ArrowTrendingDownIcon : null;
+  let color = 'text-slate-500 bg-slate-100';
+  if (positive) color = invertColor ? 'text-green-700 bg-green-50' : 'text-red-600 bg-red-50';
+  if (negative) color = invertColor ? 'text-red-600 bg-red-50' : 'text-green-700 bg-green-50';
+  return (
+    <span className={`inline-flex items-center gap-0.5 text-xs font-semibold ${color} px-1.5 py-0.5 rounded-md`}>
+      {Icon && <Icon className="h-3 w-3" />}
+      {Math.abs(change).toFixed(1)}%
+    </span>
+  );
+}
+
+// Compacte sub-rij met logo + naam + waarde aan de rechter kant
+function CompactSubRow({ sub, primary, secondary, onClick, accent = 'default' }) {
   const accents = {
-    orange: 'bg-orange-100 text-primary',
-    red:    'bg-red-100 text-red-500',
-    green:  'bg-green-100 text-green-600',
-    slate:  'bg-slate-100 text-slate-600',
+    default: 'hover:bg-slate-50',
+    danger:  'hover:bg-red-50',
+    warn:    'hover:bg-orange-50',
   };
   return (
-    <div className="surface-card-strong p-5 flex items-center gap-4 hover:shadow-lg transition-all duration-200">
-      <div className={`flex-shrink-0 rounded-2xl p-3 ${accents[accent]}`}>
-        <Icon className="h-6 w-6" />
+    <div
+      onClick={onClick}
+      className={`flex items-center justify-between rounded-xl px-3 py-2.5 cursor-pointer transition-colors ${accents[accent]}`}
+    >
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        <SubLogo vendor={sub.vendor} name={sub.name} size="sm" />
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-slate-900 truncate">{sub.name}</p>
+          <p className="text-xs text-slate-400 truncate">{sub.vendor || '—'}</p>
+        </div>
       </div>
-      <div>
-        <p className="text-sm text-slate-500">{label}</p>
-        <p className="text-2xl font-bold text-dark leading-tight">{value}</p>
-        {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
+      <div className="text-right flex-shrink-0 ml-3">
+        {primary}
+        {secondary}
       </div>
     </div>
   );
@@ -387,6 +424,24 @@ function DashboardPage() {
   const breakdownRows = breakdownMode === 'categorie' ? sortedCategories : sortedDepartments;
   const maxCost = breakdownRows[0]?.[1] ?? 1;
 
+  // Month-over-month trend: vergelijk huidige maand met vorige maand
+  const prevMonthIdx = currentMonth - 1;
+  const prevYear = prevMonthIdx < 0 ? currentYear - 1 : currentYear;
+  const prevMonthNum = prevMonthIdx < 0 ? 11 : prevMonthIdx;
+  const prevSnap = snapshots.find(s => s.year === prevYear && s.month === prevMonthNum);
+  const prevMonthCost = prevSnap ? Number(prevSnap.total_cost) : 0;
+  const momChange = prevMonthCost > 0
+    ? ((totalMonthlyCost - prevMonthCost) / prevMonthCost) * 100
+    : null;
+
+  // Top 5 duurste actieve abonnementen
+  const topSpenders = [...activeSubs]
+    .map(s => ({ sub: s, monthly: toEurMonthly(s) }))
+    .filter(x => x.monthly > 0)
+    .sort((a, b) => b.monthly - a.monthly)
+    .slice(0, 5);
+  const topSpendersMax = topSpenders[0]?.monthly ?? 1;
+
   const unusedSubs = activeSubs
     .map(sub => ({ sub, ev: evaluaties.find(e => e.subscription_id === sub.id) }))
     .filter(({ ev }) => ev && ev.usage_pct <= 30)
@@ -395,217 +450,156 @@ function DashboardPage() {
   if (subscriptions.length === 0) {
     return (
       <div className="p-6 space-y-6">
-        <h1 className="text-2xl font-bold text-dark">Dashboard</h1>
-        <div className="surface-card-strong p-12 text-center">
-          <div className="mx-auto h-16 w-16 rounded-3xl bg-primary/10 flex items-center justify-center text-primary text-3xl mb-4">📊</div>
-          <h2 className="text-lg font-semibold text-dark">Welkom bij Flexurity Abonnementenbeheer</h2>
-          <p className="text-sm text-slate-500 mt-2 max-w-md mx-auto">
-            Voeg je eerste abonnement toe en je dashboard wordt automatisch gevuld met kosten-, gebruiks- en verlopingsinzichten.
+        <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
+        <div className="bg-white rounded-2xl border border-slate-200/70 p-16 text-center">
+          <h2 className="text-xl font-semibold text-slate-900">Welkom bij Flexurity Abonnementenbeheer</h2>
+          <p className="text-sm text-slate-500 mt-3 max-w-md mx-auto">
+            Voeg je eerste abonnement toe — kosten, gebruik en verlopingsinzichten verschijnen automatisch.
           </p>
-          <a href="#/subscriptions" className="btn-primary text-sm mt-5 inline-block">→ Naar Abonnementen</a>
+          <a href="#/subscriptions" className="btn-primary text-sm mt-6 inline-flex items-center gap-1">
+            Naar Abonnementen <ChevronRightIcon className="h-4 w-4" />
+          </a>
         </div>
       </div>
     );
   }
 
+  // Helper voor euro formatting met tabular nums
+  const fmtEur = (v) => `€${v.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmtEurNoDec = (v) => `€${v.toLocaleString('nl-NL', { maximumFractionDigits: 0 })}`;
+
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold text-dark">Dashboard</h1>
+      <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
 
-      {/* Stat cards */}
+      {/* KPI rij — minimal, modern */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          icon={CreditCardIcon}
+        <MetricCard
+          label="Maandkosten"
+          value={fmtEur(totalMonthlyCost)}
+          large
+          trend={momChange !== null ? <TrendBadge change={momChange} /> : null}
+          hint={
+            momChange !== null
+              ? `${momChange >= 0 ? '+' : ''}${(totalMonthlyCost - prevMonthCost).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} t.o.v. vorige maand`
+              : hasForeignCurrency ? `incl. ${ratesLabel}` : 'Eerste maand'
+          }
+        />
+        <MetricCard
+          label="Jaarkosten"
+          value={fmtEurNoDec(totalYearlyCost)}
+          hint={hasForeignCurrency ? `incl. ${ratesLabel}` : 'op basis van huidige actieve subs'}
+        />
+        <MetricCard
           label="Actieve abonnementen"
           value={activeSubs.length}
-          accent="slate"
+          hint={`${subscriptions.length - activeSubs.length} inactief`}
         />
-        <StatCard
-          icon={BanknotesIcon}
-          label="Maandkosten"
-          value={`€${totalMonthlyCost.toFixed(2)}`}
-          sub={hasForeignCurrency ? `incl. ${ratesLabel}` : null}
-          accent="orange"
-        />
-        <StatCard
-          icon={CalendarDaysIcon}
-          label="Jaarkosten"
-          value={`€${totalYearlyCost.toFixed(0)}`}
-          sub={hasForeignCurrency ? `incl. ${ratesLabel}` : null}
-          accent="green"
-        />
-        <StatCard
-          icon={ClipboardDocumentCheckIcon}
-          label="Evaluaties verouderd"
+        <MetricCard
+          label="Verouderde evaluaties"
           value={verouderdCount}
-          sub={verouderdCount === 0 ? 'Alles up-to-date' : 'ouder dan 4 maanden'}
-          accent={verouderdCount > 0 ? 'red' : 'green'}
+          hint={verouderdCount === 0 ? 'Alles up-to-date' : 'ouder dan 4 maanden'}
         />
       </div>
 
-      {/* Middle row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-
-        {/* Expiring soon */}
-        <div className="surface-card-strong p-5 flex flex-col">
-          <h2 className="text-base font-semibold text-dark mb-4">Verloopt binnen 60 dagen</h2>
-          {expiringSoonList.length === 0 ? (
-            <p className="text-sm text-slate-400">Geen abonnementen die binnenkort verlopen.</p>
-          ) : (
-            <div className="space-y-2 flex-1 overflow-y-auto pr-1">
-              {expiringSoonList.map(sub => {
-                const expiryDate = sub.renewal_date || sub.end_date;
-              const days = Math.ceil((new Date(expiryDate) - now) / (1000 * 60 * 60 * 24));
-                const urgent = days < 30;
-                return (
-                  <div key={sub.id} onClick={() => setDetailSub(sub)} className={`flex items-center justify-between rounded-lg px-3 py-2 cursor-pointer hover:brightness-95 transition-all ${urgent ? 'bg-red-50' : 'bg-orange-50'}`}>
-                    <div className="flex items-center gap-3">
-                      <SubLogo vendor={sub.vendor} name={sub.name} size="sm" />
-                      <div>
-                        <p className="text-sm font-medium text-dark">{sub.name}</p>
-                        <p className="text-xs text-slate-400">{sub.vendor || '-'}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className={`text-sm font-semibold ${urgent ? 'text-red-500' : 'text-orange-500'}`}>
-                        {format(new Date(expiryDate), 'dd-MM-yyyy')}
-                      </p>
-                      <p className={`text-xs ${urgent ? 'text-red-400' : 'text-orange-400'}`}>
-                        nog {days} dagen
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Laag gebruik */}
-        <div className="surface-card-strong p-5 flex flex-col">
-          <h2 className="text-base font-semibold text-dark mb-4">Weinig gebruikt <span className="text-xs font-normal text-slate-400 ml-1">≤ 30% gebruik</span></h2>
-          {unusedSubs.length === 0 ? (
-            <p className="text-sm text-slate-400">Geen abonnementen met laag gebruik.</p>
-          ) : (
-            <div className="space-y-2 flex-1 overflow-y-auto pr-1">
-              {unusedSubs.map(({ sub, ev }) => (
-                <div key={sub.id} onClick={() => setDetailSub(sub)} className="flex items-center justify-between rounded-lg px-3 py-2 bg-slate-50 cursor-pointer hover:bg-slate-100 transition-all">
-                  <div className="flex items-center gap-3">
-                    <SubLogo vendor={sub.vendor} name={sub.name} size="sm" />
-                    <div>
-                      <p className="text-sm font-medium text-dark">{sub.name}</p>
-                      <p className="text-xs text-slate-400">{sub.vendor || '-'}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-slate-500">{ev.usage_pct}%</p>
-                    <p className="text-xs text-slate-400">€{toEurMonthly(sub).toFixed(0)}/mnd</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Cost breakdown widget */}
-        <div className="surface-card-strong p-5 flex flex-col">
-          <div className="flex items-center justify-between mb-3">
+      {/* Cost breakdown widget — boven de chart */}
+      <div className="bg-white rounded-2xl border border-slate-200/70 p-5">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Verdeling</p>
+            <h2 className="text-base font-semibold text-slate-900 mt-0.5">Per {breakdownMode === 'categorie' ? 'categorie' : 'afdeling'}</h2>
+          </div>
+          <div className="flex items-center gap-2">
             <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5">
               <button
                 onClick={() => setBreakdownMode('afdeling')}
-                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${breakdownMode === 'afdeling' ? 'bg-white shadow text-dark' : 'text-slate-500 hover:text-dark'}`}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${breakdownMode === 'afdeling' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 Afdeling
               </button>
               <button
                 onClick={() => setBreakdownMode('categorie')}
-                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${breakdownMode === 'categorie' ? 'bg-white shadow text-dark' : 'text-slate-500 hover:text-dark'}`}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${breakdownMode === 'categorie' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 Categorie
               </button>
             </div>
-            <div className="flex gap-1">
+            <div className="flex gap-0.5 bg-slate-100 rounded-lg p-0.5">
               {CATEGORY_PERIODS.map(p => (
                 <button
                   key={p.key}
                   onClick={() => setCategoryPeriod(p.key)}
-                  className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${categoryPeriod === p.key ? 'bg-primary text-white' : 'text-slate-400 hover:bg-slate-100'}`}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${categoryPeriod === p.key ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   {p.label}
                 </button>
               ))}
             </div>
           </div>
-          {breakdownRows.length === 0 ? (
-            <p className="text-sm text-slate-400">Nog geen data.</p>
-          ) : (
-            <div className="space-y-3">
-              {breakdownRows.map(([label, cost]) => {
-                const color = breakdownMode === 'afdeling'
-                  ? (deptColorMap[label] ?? '#F47920')
-                  : '#F47920';
-                return (
-                  <div key={label}>
-                    <div className="flex justify-between text-xs text-slate-500 mb-1">
-                      <span className="flex items-center gap-1.5">
-                        {breakdownMode === 'afdeling' && (
-                          <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                        )}
-                        {label}
-                      </span>
-                      <span className="font-medium text-dark">€{cost.toFixed(0)}</span>
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{ width: `${(cost / maxCost) * 100}%`, backgroundColor: color }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
+        {breakdownRows.length === 0 ? (
+          <p className="text-sm text-slate-400">Nog geen data.</p>
+        ) : (
+          <div className="space-y-3">
+            {breakdownRows.map(([label, cost]) => {
+              const color = breakdownMode === 'afdeling'
+                ? (deptColorMap[label] ?? '#F47920')
+                : '#F47920';
+              return (
+                <div key={label}>
+                  <div className="flex justify-between text-xs mb-1.5">
+                    <span className="flex items-center gap-1.5 text-slate-600">
+                      {breakdownMode === 'afdeling' && (
+                        <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                      )}
+                      <span className="font-medium">{label}</span>
+                    </span>
+                    <span className="font-semibold text-slate-900 tabular-nums">{fmtEurNoDec(cost)}</span>
+                  </div>
+                  <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${(cost / maxCost) * 100}%`, backgroundColor: color }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Cashflow grafiek */}
-      <div className="surface-card-strong p-5" style={{ resize: 'both', overflow: 'hidden', minWidth: '40%', maxWidth: '100%', width: '100%', minHeight: '280px' }}>
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <h2 className="text-base font-semibold text-dark">Cashflow</h2>
-            <div className="flex items-center gap-1">
+      <div className="bg-white rounded-2xl border border-slate-200/70 p-5">
+        <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Cashflow</p>
+            <h2 className="text-base font-semibold text-slate-900 mt-0.5">Maandkosten {selectedYear}</h2>
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-0.5 bg-slate-100 rounded-lg p-0.5">
               <button
                 onClick={() => setWindowStart(w => Math.max(w - 1, minYear))}
                 disabled={windowStart <= minYear}
-                className="px-2 py-1 rounded-md text-sm text-slate-400 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="px-2 py-1 rounded-md text-sm text-slate-400 hover:bg-white hover:shadow-sm disabled:opacity-30 disabled:cursor-not-allowed transition-all"
               >‹</button>
               {visibleYears.map(y => (
                 <button
                   key={y}
                   onClick={() => setSelectedYear(y)}
-                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${selectedYear === y ? 'bg-primary text-white' : 'text-slate-400 hover:bg-slate-100'}`}
+                  className={`px-3 py-1 rounded-md text-sm font-medium transition-all ${selectedYear === y ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
                 >
                   {y}
                 </button>
               ))}
               <button
                 onClick={() => setWindowStart(w => w + 1)}
-                className="px-2 py-1 rounded-md text-sm text-slate-400 hover:bg-slate-100 transition-colors"
+                className="px-2 py-1 rounded-md text-sm text-slate-400 hover:bg-white hover:shadow-sm transition-all"
               >›</button>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-4 text-xs text-slate-400">
-              <span className="flex items-center gap-1.5"><span className="inline-block w-4 h-0.5 bg-primary rounded" />Historisch</span>
-              <span className="flex items-center gap-1.5">
-                <svg width="16" height="2" className="flex-shrink-0"><line x1="0" y1="1" x2="16" y2="1" stroke="#F47920" strokeWidth="2" strokeDasharray="3,2" strokeOpacity="0.5" /></svg>
-                Prognose
-              </span>
             </div>
             <button
               onClick={handleToggleLegend}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${legendOpen ? 'bg-slate-800 text-white border-slate-800' : 'text-slate-400 border-slate-200 hover:border-slate-300 hover:text-slate-600'}`}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${legendOpen ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
             >
               <span className="flex gap-0.5">
                 {DEPT_COLORS.slice(0, 3).map(c => <span key={c} className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: c }} />)}
@@ -616,7 +610,7 @@ function DashboardPage() {
         </div>
 
         {legendOpen && (
-          <div className="mb-3 p-3 bg-slate-50 rounded-xl flex flex-wrap gap-x-5 gap-y-2 items-center">
+          <div className="mb-4 p-3 bg-slate-50/70 rounded-xl flex flex-wrap gap-x-5 gap-y-2 items-center border border-slate-100">
             <label className="flex items-center gap-2 cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -669,6 +663,97 @@ function DashboardPage() {
           visibleDepts={effectiveVisibleDepts}
           colorMap={deptColorMap}
         />
+      </div>
+
+      {/* Bottom row — Top duurste + Verloopt + Weinig gebruikt */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+        {/* Top 5 duurste */}
+        <div className="bg-white rounded-2xl border border-slate-200/70 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Top 5 duurste</p>
+              <h2 className="text-base font-semibold text-slate-900 mt-0.5">Hoogste maandkosten</h2>
+            </div>
+          </div>
+          {topSpenders.length === 0 ? (
+            <p className="text-sm text-slate-400">Nog geen data.</p>
+          ) : (
+            <div className="space-y-3">
+              {topSpenders.map(({ sub, monthly }) => (
+                <div key={sub.id} onClick={() => setDetailSub(sub)} className="cursor-pointer group">
+                  <div className="flex items-center justify-between mb-1.5 gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <SubLogo vendor={sub.vendor} name={sub.name} size="sm" />
+                      <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 truncate">{sub.name}</span>
+                    </div>
+                    <span className="text-sm font-semibold text-slate-900 tabular-nums flex-shrink-0">{fmtEur(monthly)}</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                    <div className="h-full bg-primary/80 rounded-full transition-all duration-500" style={{ width: `${(monthly / topSpendersMax) * 100}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Verloopt binnenkort */}
+        <div className="bg-white rounded-2xl border border-slate-200/70 p-5">
+          <div className="mb-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Verloopt binnen 60 dagen</p>
+            <h2 className="text-base font-semibold text-slate-900 mt-0.5">{expiringSoonList.length} {expiringSoonList.length === 1 ? 'abonnement' : 'abonnementen'}</h2>
+          </div>
+          {expiringSoonList.length === 0 ? (
+            <p className="text-sm text-slate-400">Niets staat op verlopen.</p>
+          ) : (
+            <div className="space-y-1 -mx-1">
+              {expiringSoonList.slice(0, 6).map(sub => {
+                const expiryDate = sub.renewal_date || sub.end_date;
+                const days = Math.ceil((new Date(expiryDate) - now) / (1000 * 60 * 60 * 24));
+                const urgent = days < 30;
+                return (
+                  <CompactSubRow
+                    key={sub.id}
+                    sub={sub}
+                    onClick={() => setDetailSub(sub)}
+                    accent={urgent ? 'danger' : 'warn'}
+                    primary={
+                      <p className={`text-sm font-semibold tabular-nums ${urgent ? 'text-red-600' : 'text-orange-600'}`}>
+                        nog {days}d
+                      </p>
+                    }
+                    secondary={
+                      <p className="text-xs text-slate-400 tabular-nums">{format(new Date(expiryDate), 'dd MMM yyyy')}</p>
+                    }
+                  />
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Weinig gebruikt */}
+        <div className="bg-white rounded-2xl border border-slate-200/70 p-5">
+          <div className="mb-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Weinig gebruikt</p>
+            <h2 className="text-base font-semibold text-slate-900 mt-0.5">{unusedSubs.length} {unusedSubs.length === 1 ? 'abonnement' : 'abonnementen'} <span className="text-xs font-normal text-slate-400">≤ 30%</span></h2>
+          </div>
+          {unusedSubs.length === 0 ? (
+            <p className="text-sm text-slate-400">Geen abonnementen met laag gebruik.</p>
+          ) : (
+            <div className="space-y-1 -mx-1">
+              {unusedSubs.slice(0, 6).map(({ sub, ev }) => (
+                <CompactSubRow
+                  key={sub.id}
+                  sub={sub}
+                  onClick={() => setDetailSub(sub)}
+                  primary={<p className="text-sm font-semibold text-slate-900 tabular-nums">{ev.usage_pct}%</p>}
+                  secondary={<p className="text-xs text-slate-400 tabular-nums">{fmtEurNoDec(toEurMonthly(sub))}/mnd</p>}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {detailSub && (
