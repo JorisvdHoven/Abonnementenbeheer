@@ -183,61 +183,62 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period }) 
         <>
           <div className="divide-y divide-slate-200">
             {accounts.map((account, idx) => (
-              <div key={account.id ?? account._tempId ?? idx} className="p-3 space-y-2">
-                <div className="grid grid-cols-1 sm:grid-cols-[1fr,140px,140px,auto] gap-2 items-end">
-                  <div>
-                    <label className="block text-xs text-slate-500 mb-1">Naam medewerker</label>
-                    <input
-                      type="text"
-                      value={account.owner_name || ''}
-                      onChange={(e) => updateAccount(idx, { owner_name: e.target.value })}
-                      placeholder="Bijv. Joris van den Hoven"
-                      className={inputClass}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-500 mb-1">Startdatum</label>
-                    <input
-                      type="date"
-                      value={account.start_date || ''}
-                      onChange={(e) => updateAccount(idx, { start_date: e.target.value })}
-                      className={inputClass}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-500 mb-1">Einddatum</label>
-                    <input
-                      type="date"
-                      value={account.end_date || ''}
-                      onChange={(e) => updateAccount(idx, { end_date: e.target.value })}
-                      className={inputClass}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeAccount(idx)}
-                    className="h-9 w-9 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
-                    aria-label="Account verwijderen"
-                  >
-                    <TrashIcon className="h-4 w-4" />
-                  </button>
+              <div
+                key={account.id ?? account._tempId ?? idx}
+                className="p-3 grid grid-cols-1 sm:grid-cols-[1fr,140px,140px,140px,auto] gap-2 items-end"
+              >
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Naam medewerker</label>
+                  <input
+                    type="text"
+                    value={account.owner_name || ''}
+                    onChange={(e) => updateAccount(idx, { owner_name: e.target.value })}
+                    placeholder="Bijv. Joris van den Hoven"
+                    className={inputClass}
+                  />
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-[1fr,140px,140px,auto] gap-2">
-                  <div className="sm:col-start-1 sm:col-span-3 flex items-center gap-2">
-                    <label className="text-xs text-slate-500 whitespace-nowrap">Eigen prijs (optioneel)</label>
-                    <div className="flex flex-1 max-w-[200px]">
-                      <span className="px-2.5 py-1.5 border border-slate-200 border-r-0 rounded-l-md bg-slate-100 text-xs text-slate-500 flex items-center">{sym}</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={account.cost ?? ''}
-                        onChange={(e) => updateAccount(idx, { cost: e.target.value })}
-                        placeholder={defaultCost ? `${defaultCost} (standaard)` : 'standaard'}
-                        className="block w-full px-2.5 py-1.5 rounded-r-md border border-slate-200 text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-                      />
-                    </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Startdatum</label>
+                  <input
+                    type="date"
+                    value={account.start_date || ''}
+                    onChange={(e) => updateAccount(idx, { start_date: e.target.value })}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Einddatum</label>
+                  <input
+                    type="date"
+                    value={account.end_date || ''}
+                    onChange={(e) => updateAccount(idx, { end_date: e.target.value })}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">
+                    Prijs <span className="text-slate-400 font-normal">(optioneel)</span>
+                  </label>
+                  <div className="flex">
+                    <span className="px-2.5 py-2 border border-slate-200 border-r-0 rounded-l-md bg-slate-100 text-sm text-slate-500 flex items-center">{sym}</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={account.cost ?? ''}
+                      onChange={(e) => updateAccount(idx, { cost: e.target.value })}
+                      placeholder={defaultCost ? `${defaultCost}` : 'standaard'}
+                      className="block w-full px-3 py-2 rounded-r-md border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                    />
                   </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => removeAccount(idx)}
+                  className="h-9 w-9 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                  aria-label="Account verwijderen"
+                >
+                  <TrashIcon className="h-4 w-4" />
+                </button>
               </div>
             ))}
           </div>
