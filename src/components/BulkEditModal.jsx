@@ -6,7 +6,6 @@ const FIELDS = [
   { key: 'type',       label: 'Type',      type: 'select' },
   { key: 'category',   label: 'Categorie', type: 'select' },
   { key: 'status',     label: 'Status',    type: 'fixed', options: ['actief', 'verlopen', 'opgezegd'] },
-  { key: 'account_owner', label: 'Account van', type: 'text' },
 ];
 
 function BulkEditModal({ count, categoryOptions = [], typeOptions = [], departmentOptions = [], onApply, onClose }) {
@@ -26,8 +25,7 @@ function BulkEditModal({ count, categoryOptions = [], typeOptions = [], departme
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (saving) return;
-    // Account van mag leeg zijn (= leegmaken). Andere velden vereisen een keuze.
-    if (field !== 'account_owner' && !value) return;
+    if (!value) return;
     setSaving(true);
     await onApply(field, value);
     setSaving(false);
@@ -84,18 +82,6 @@ function BulkEditModal({ count, categoryOptions = [], typeOptions = [], departme
               ))}
             </select>
           )}
-          {fieldDef.type === 'text' && (
-            <>
-              <input
-                type="text"
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                placeholder="Laat leeg om te wissen"
-                className="field-strong w-full px-3 py-2 rounded-md border focus:outline-none"
-              />
-              <p className="mt-1 text-xs text-slate-400">Leeg laten = veld leegmaken bij alle geselecteerde abonnementen.</p>
-            </>
-          )}
         </div>
 
         <div className="flex justify-end gap-3 pt-1">
@@ -109,7 +95,7 @@ function BulkEditModal({ count, categoryOptions = [], typeOptions = [], departme
           </button>
           <button
             type="submit"
-            disabled={saving || (field !== 'account_owner' && !value)}
+            disabled={saving || !value}
             className="btn-primary disabled:opacity-50"
           >
             {saving ? 'Bezig...' : `Wijzig ${count} abonnement${count !== 1 ? 'en' : ''}`}
