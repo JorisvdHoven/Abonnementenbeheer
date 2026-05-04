@@ -48,7 +48,7 @@ export function useSubscriptions() {
     return { data: saved };
   };
 
-  const updateSubscription = async (id, updates) => {
+  const updateSubscription = async (id, updates, { silent = false } = {}) => {
     const { data, error } = await supabase
       .from('subscriptions')
       .update(updates)
@@ -57,13 +57,13 @@ export function useSubscriptions() {
 
     if (error) {
       console.error('Error updating subscription:', error);
-      toast.error(`Opslaan mislukt: ${error.message}`);
+      if (!silent) toast.error(`Opslaan mislukt: ${error.message}`);
       return { error };
     }
 
     const saved = data[0];
     setSubscriptions(prev => prev.map(sub => sub.id === id ? saved : sub));
-    toast.success('Wijzigingen opgeslagen.');
+    if (!silent) toast.success('Wijzigingen opgeslagen.');
 
     // Herbereken snapshots als startdatum of kosten gewijzigd zijn
     await removeSubscriptionFromSnapshots(supabase, id);
@@ -72,7 +72,7 @@ export function useSubscriptions() {
     return { data: saved };
   };
 
-  const deleteSubscription = async (id) => {
+  const deleteSubscription = async (id, { silent = false } = {}) => {
     const { error } = await supabase
       .from('subscriptions')
       .delete()
@@ -80,11 +80,13 @@ export function useSubscriptions() {
 
     if (error) {
       console.error('Error deleting subscription:', error);
-      toast.error(`Verwijderen mislukt: ${error.message}`);
+      if (!silent) toast.error(`Verwijderen mislukt: ${error.message}`);
+      return { error };
     } else {
       setSubscriptions(prev => prev.filter(sub => sub.id !== id));
       await removeSubscriptionFromSnapshots(supabase, id);
-      toast.success('Abonnement verwijderd.');
+      if (!silent) toast.success('Abonnement verwijderd.');
+      return { ok: true };
     }
   };
 

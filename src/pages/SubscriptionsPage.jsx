@@ -7,6 +7,8 @@ import SubscriptionModal from '../components/SubscriptionModal';
 import { SubscriptionDetailPanel } from '../components/SubscriptionDetailPanel';
 import { SubLogo } from '../components/SubLogo';
 import Modal from '../components/Modal';
+import BulkEditModal from '../components/BulkEditModal';
+import { toast } from '../lib/toast';
 import { addDays, isBefore } from 'date-fns';
 import { toMonthly } from '../lib/costUtils';
 import { formatDate, formatDateLong, currencySymbol } from '../lib/format';
@@ -333,6 +335,7 @@ function SubscriptionsPage() {
   const [selected, setSelected] = useState(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
 
   const toggleSelect = (id) => setSelected(prev => {
     const next = new Set(prev);
@@ -353,13 +356,36 @@ function SubscriptionsPage() {
   const handleBulkDelete = async () => {
     setBulkDeleting(true);
     const ids = [...selected];
+    let succeeded = 0;
+    let failed = 0;
     for (const id of ids) {
       // eslint-disable-next-line no-await-in-loop
-      await deleteSubscription(id);
+      const result = await deleteSubscription(id, { silent: true });
+      if (result?.ok) succeeded++;
+      else failed++;
     }
     setBulkDeleting(false);
     setBulkDeleteOpen(false);
     clearSelection();
+    if (succeeded > 0) toast.success(`${succeeded} abonnement${succeeded !== 1 ? 'en' : ''} verwijderd.`);
+    if (failed > 0) toast.error(`${failed} abonnement${failed !== 1 ? 'en' : ''} kon${failed === 1 ? '' : 'den'} niet verwijderd worden.`);
+  };
+
+  const handleBulkEdit = async (field, value) => {
+    const ids = [...selected];
+    const updates = { [field]: value === '' ? null : value };
+    let succeeded = 0;
+    let failed = 0;
+    for (const id of ids) {
+      // eslint-disable-next-line no-await-in-loop
+      const result = await updateSubscription(id, updates, { silent: true });
+      if (result?.error) failed++;
+      else succeeded++;
+    }
+    setBulkEditOpen(false);
+    clearSelection();
+    if (succeeded > 0) toast.success(`${succeeded} abonnement${succeeded !== 1 ? 'en' : ''} bijgewerkt.`);
+    if (failed > 0) toast.error(`${failed} abonnement${failed !== 1 ? 'en' : ''} kon${failed === 1 ? '' : 'den'} niet bijgewerkt worden.`);
   };
 
   const categories = settingCategories.length > 0
@@ -559,6 +585,12 @@ function SubscriptionsPage() {
           <span className="text-sm font-medium text-dark">{selected.size} geselecteerd</span>
           <span className="w-px h-5 bg-slate-200" />
           <button
+            onClick={() => setBulkEditOpen(true)}
+            className="text-sm font-medium text-primary hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors"
+          >
+            Wijzigen
+          </button>
+          <button
             onClick={() => setBulkDeleteOpen(true)}
             className="text-sm font-medium text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-full transition-colors"
           >
@@ -571,6 +603,17 @@ function SubscriptionsPage() {
             Annuleren
           </button>
         </div>
+      )}
+
+      {bulkEditOpen && (
+        <BulkEditModal
+          count={selected.size}
+          categoryOptions={categories}
+          typeOptions={typesList}
+          departmentOptions={departmentsList}
+          onApply={handleBulkEdit}
+          onClose={() => setBulkEditOpen(false)}
+        />
       )}
 
       {bulkDeleteOpen && (
