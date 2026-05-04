@@ -57,7 +57,7 @@ function useAnimated(value, duration = 450) {
 }
 
 function LineChart({ data, showTotal = true, currentMonth, months, snapshots, currentYear, chartMax, departmentData, visibleDepts, colorMap = {} }) {
-  const [tooltip, setTooltip] = useState(null);
+  const [activeIdx, setActiveIdx] = useState(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const [dims, setDims] = useState({ w: 600, h: 200 });
   const containerRef = useRef(null);
@@ -133,61 +133,108 @@ function LineChart({ data, showTotal = true, currentMonth, months, snapshots, cu
           <path d={toPath(forePoints)} fill="none" stroke="#F47920" strokeWidth="2" strokeDasharray="5,4" strokeLinecap="round" strokeLinejoin="round" opacity="0.5" />
         )}
 
-        {/* Dots + hover areas */}
+        {/* Statische dots */}
         {animData.map((v, i) => {
           const isFuture = i > currentMonth;
           const isCurrent = i === currentMonth;
+          if (!showTotal) return null;
           return (
-            <g key={i}>
-              {showTotal && (
-                <circle
-                  cx={x(i)} cy={y(v)} r={isCurrent ? 5 : 4}
-                  fill={isFuture ? 'white' : '#F47920'}
-                  stroke="#F47920" strokeWidth={isFuture ? 1.5 : 0}
-                  opacity={isFuture ? 0.5 : 1}
-                />
-              )}
-              <rect
-                x={x(i) - 20} y={padT} width={40} height={innerH + 10}
-                fill="transparent"
-                onMouseEnter={(e) => { setTooltip({ i, v }); setTooltipPos({ x: e.clientX, y: e.clientY }); }}
-                onMouseMove={(e) => setTooltipPos({ x: e.clientX, y: e.clientY })}
-                onMouseLeave={() => setTooltip(null)}
-                style={{ cursor: 'default' }}
-              />
-            </g>
+            <circle
+              key={i}
+              cx={x(i)} cy={y(v)} r={isCurrent ? 5 : 4}
+              fill={isFuture ? 'white' : '#F47920'}
+              stroke="#F47920" strokeWidth={isFuture ? 1.5 : 0}
+              opacity={isFuture ? 0.5 : 1}
+            />
           );
         })}
+
+        {/* Active hover guideline + highlight */}
+        {activeIdx !== null && (
+          <g style={{ pointerEvents: 'none' }}>
+            <line
+              x1={x(activeIdx)} x2={x(activeIdx)}
+              y1={padT} y2={padT + innerH}
+              stroke="#cbd5e1" strokeWidth="1" strokeDasharray="3,3"
+            />
+            {showTotal && (
+              <circle
+                cx={x(activeIdx)} cy={y(animData[activeIdx])} r="6"
+                fill="#F47920" stroke="white" strokeWidth="2"
+              />
+            )}
+            {deptEntries.map(([dept, deptData]) => {
+              if (!visibleDepts?.has(dept)) return null;
+              return (
+                <circle
+                  key={`hl-${dept}`}
+                  cx={x(activeIdx)} cy={y(deptData[activeIdx] ?? 0)} r="4"
+                  fill={colorMap[dept] ?? '#94a3b8'} stroke="white" strokeWidth="1.5"
+                />
+              );
+            })}
+          </g>
+        )}
 
         {/* Month labels */}
         {months.map((m, i) => (
           <text key={i} x={x(i)} y={H - 4} textAnchor="middle" fontSize="10"
-            fill={i === currentMonth ? '#F47920' : '#94a3b8'}
-            fontWeight={i === currentMonth ? '600' : '400'}
+            fill={i === currentMonth ? '#F47920' : i === activeIdx ? '#475569' : '#94a3b8'}
+            fontWeight={i === currentMonth || i === activeIdx ? '600' : '400'}
           >{m}</text>
         ))}
+
+        {/* Single overlay voor mouse tracking */}
+        <rect
+          x={padL} y={padT} width={innerW} height={innerH}
+          fill="transparent"
+          onMouseMove={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const idx = Math.max(0, Math.min(11, Math.round((mouseX / innerW) * 11)));
+            setActiveIdx(idx);
+            const containerRect = containerRef.current.getBoundingClientRect();
+            setTooltipPos({
+              x: e.clientX - containerRect.left,
+              y: e.clientY - containerRect.top,
+            });
+          }}
+          onMouseLeave={() => setActiveIdx(null)}
+          style={{ cursor: 'crosshair' }}
+        />
       </svg>
 
-      {tooltip && (
+      {activeIdx !== null && (
         <div
-          className="pointer-events-none fixed z-50 rounded-lg bg-slate-800 px-3 py-2 text-xs text-white shadow-lg space-y-1"
-          style={{ left: tooltipPos.x + 12, top: tooltipPos.y - 36 }}
+          className="pointer-events-none absolute z-10 rounded-lg bg-slate-900/95 backdrop-blur-sm px-3 py-2 text-xs text-white shadow-xl space-y-1.5 min-w-[160px]"
+          style={(() => {
+            // Smart positioning: rechts van het punt, of links als 'ie aan de rechterrand zit
+            const pointX = x(activeIdx);
+            const onRightSide = pointX > W * 0.65;
+            return {
+              left: onRightSide ? undefined : pointX + 12,
+              right: onRightSide ? W - pointX + 12 : undefined,
+              top: Math.max(8, Math.min(tooltipPos.y - 16, H - 100)),
+            };
+          })()}
         >
+          <div className="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">{months[activeIdx]}</div>
           {showTotal && (
-            <div className="flex items-center gap-1.5">
-              <span className="inline-block w-4 h-0.5 rounded bg-primary flex-shrink-0" />
-              <span className="text-slate-300">Totaal</span>
-              <span className="font-semibold ml-auto pl-3">€{(data[tooltip.i] ?? 0).toFixed(0)}</span>
+            <div className="flex items-center gap-2">
+              <span className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0 bg-primary" />
+              <span className="text-slate-300 flex-1">Totaal</span>
+              <span className="font-semibold tabular-nums">€{Math.round(data[activeIdx] ?? 0).toLocaleString('nl-NL')}</span>
             </div>
           )}
-          {deptEntries.map(([dept, deptData]) => (
-            <div key={dept} className="flex items-center gap-1.5">
-              <span className="inline-block w-4 h-0.5 rounded flex-shrink-0" style={{ backgroundColor: colorMap[dept] ?? '#94a3b8' }} />
-              <span className="text-slate-300">{dept}</span>
-              <span className="font-medium ml-auto pl-3">€{(deptData[tooltip.i] ?? 0).toFixed(0)}</span>
-            </div>
-          ))}
-          <div className="text-slate-500 pt-0.5">{months[tooltip.i]}</div>
+          {deptEntries
+            .filter(([dept]) => visibleDepts?.has(dept))
+            .map(([dept, deptData]) => (
+              <div key={dept} className="flex items-center gap-2">
+                <span className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: colorMap[dept] ?? '#94a3b8' }} />
+                <span className="text-slate-300 flex-1">{dept}</span>
+                <span className="font-medium tabular-nums">€{Math.round(deptData[activeIdx] ?? 0).toLocaleString('nl-NL')}</span>
+              </div>
+            ))}
         </div>
       )}
     </div>
