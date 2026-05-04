@@ -39,71 +39,83 @@ function Navbar({ user }) {
   }, []);
 
   const initials = displayName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  const allLinks = [...LINKS, ...(isAdmin ? ADMIN_LINKS : [])];
+  const notifCount = notifications.length;
 
   return (
-    <nav className="sticky top-0 z-40 bg-slate-900 border-b border-slate-700/60 shadow-lg">
+    <nav className="sticky top-0 z-40 bg-slate-900/90 backdrop-blur-xl border-b border-slate-800/80">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-14">
 
         {/* Left: logo + links */}
         <div className="flex items-center gap-6">
-          <Link to="/dashboard" className="flex items-center">
+          <Link to="/dashboard" className="flex items-center hover:opacity-80 transition-opacity">
             <img src="/flexurity-logo-white.svg" alt="Flexurity" className="h-7 w-auto" />
           </Link>
-          <div className="hidden sm:flex items-center gap-1">
-            {[...LINKS, ...(isAdmin ? ADMIN_LINKS : [])].map(({ to, label }) => (
-              <Link
-                key={to}
-                to={to}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  location.pathname === to
-                    ? 'bg-primary text-white'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-800'
-                }`}
-              >
-                {label}
-              </Link>
-            ))}
+          <div className="hidden sm:flex items-center gap-0.5">
+            {allLinks.map(({ to, label }) => {
+              const active = location.pathname === to;
+              return (
+                <Link
+                  key={to}
+                  to={to}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                    active
+                      ? 'bg-primary/15 text-primary'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                  }`}
+                >
+                  {label}
+                </Link>
+              );
+            })}
           </div>
         </div>
 
         {/* Right: bell + user + logout */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1">
 
-          {/* Bell */}
+          {/* Bell met numerieke badge */}
           <div className="relative" ref={bellRef}>
             <button
               onClick={() => setBellOpen(o => !o)}
-              className="relative p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              aria-label="Notificaties"
+              className="relative p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all"
             >
               <BellIcon className="h-5 w-5" />
-              {notifications.length > 0 && (
-                <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-red-500 rounded-full" />
+              {notifCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-slate-900 tabular-nums">
+                  {notifCount > 9 ? '9+' : notifCount}
+                </span>
               )}
             </button>
 
             {bellOpen && (
-              <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl z-10 overflow-hidden border border-slate-100">
-                <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between">
+              <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl ring-1 ring-slate-200/70 overflow-hidden">
+                <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
                   <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Notificaties</p>
-                  {notifications.length > 0 && (
-                    <span className="text-xs font-semibold bg-red-100 text-red-500 px-1.5 py-0.5 rounded-full">{notifications.length}</span>
+                  {notifCount > 0 && (
+                    <span className="text-xs font-semibold bg-red-50 text-red-600 px-2 py-0.5 rounded-full tabular-nums">{notifCount}</span>
                   )}
                 </div>
-                {notifications.length === 0 ? (
-                  <div className="px-4 py-6 text-sm text-slate-400 text-center">Momenteel geen notificaties</div>
+                {notifCount === 0 ? (
+                  <div className="px-4 py-8 text-sm text-slate-400 text-center">Momenteel geen notificaties</div>
                 ) : (
-                  <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
+                  <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
                     {notifications.slice(0, 5).map((sub) => (
-                      <div key={sub.id} className="flex items-start justify-between px-4 py-3">
-                        <div>
-                          <p className="text-sm font-medium text-slate-700">{sub.name}</p>
+                      <div key={sub.id} className="flex items-start justify-between px-4 py-3 hover:bg-slate-50 transition-colors">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-slate-800 truncate">{sub.name}</p>
                           {sub._type === 'verlopen' ? (
-                            <p className="text-xs text-red-500 mt-0.5">Verlopen op {formatDate(sub.end_date || sub.renewal_date)}</p>
+                            <p className="text-xs text-red-500 mt-0.5 tabular-nums">Verlopen op {formatDate(sub.end_date || sub.renewal_date)}</p>
                           ) : (
-                            <p className="text-xs text-slate-400 mt-0.5">Verloopt op {formatDate(sub.renewal_date || sub.end_date)}</p>
+                            <p className="text-xs text-slate-400 mt-0.5 tabular-nums">Verloopt op {formatDate(sub.renewal_date || sub.end_date)}</p>
                           )}
                         </div>
-                        <button onClick={() => dismissNotification(sub.id)} className="ml-2 text-slate-300 hover:text-slate-500 flex-shrink-0">
+                        <button
+                          onClick={() => dismissNotification(sub.id)}
+                          aria-label="Wegklikken"
+                          className="ml-2 p-1 -m-1 text-slate-300 hover:text-slate-600 hover:bg-slate-100 rounded-md flex-shrink-0 transition-colors"
+                        >
                           <XMarkIcon className="h-4 w-4" />
                         </button>
                       </div>
@@ -114,25 +126,22 @@ function Navbar({ user }) {
             )}
           </div>
 
-          {/* Divider */}
-          <div className="w-px h-5 bg-slate-700" />
-
-          {/* Avatar + name */}
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+          {/* User chip — gradient avatar + naam */}
+          <div className="flex items-center gap-2 ml-1 px-2 py-1 rounded-lg">
+            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-orange-400 to-primary flex items-center justify-center text-white text-xs font-bold ring-2 ring-slate-800 flex-shrink-0">
               {initials}
             </div>
-            <span className="text-sm text-slate-300 hidden md:block">{displayName}</span>
+            <span className="text-sm font-medium text-slate-200 hidden md:block">{displayName}</span>
           </div>
 
           {/* Logout */}
           <button
             onClick={() => supabase.auth.signOut()}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all"
             title="Uitloggen"
+            aria-label="Uitloggen"
           >
-            <ArrowRightStartOnRectangleIcon className="h-4 w-4" />
-            <span className="hidden md:block">Uitloggen</span>
+            <ArrowRightStartOnRectangleIcon className="h-5 w-5" />
           </button>
         </div>
       </div>
