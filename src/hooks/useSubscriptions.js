@@ -14,7 +14,7 @@ export function useSubscriptions() {
   const fetchSubscriptions = async () => {
     const { data, error } = await supabase
       .from('subscriptions')
-      .select('*')
+      .select('*, accounts:subscription_accounts(*)')
       .order('created_at', { ascending: false });
 
     if (error) {

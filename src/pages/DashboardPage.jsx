@@ -217,7 +217,7 @@ function StatCard({ icon: Icon, label, value, sub, accent }) {
 }
 
 function DashboardPage() {
-  const { subscriptions, loading: subsLoading, updateSubscription, deleteSubscription } = useSubscriptions();
+  const { subscriptions, loading: subsLoading, updateSubscription, deleteSubscription, refetch } = useSubscriptions();
   const { snapshots } = useMonthlySnapshots();
   const { evaluaties, loading: evalLoading } = useEvaluaties();
   const { exchangeRates, categories, types, departments: settingDepartments, addCategory, addType, addDepartment } = useSettings();
@@ -240,8 +240,10 @@ function DashboardPage() {
     }
   };
   const handleSave = async (subData) => {
-    await updateSubscription(editingSub.id, subData);
+    const result = await updateSubscription(editingSub.id, subData);
     setModalOpen(false);
+    setTimeout(() => refetch(), 100);
+    return result;
   };
 
   const toEurMonthly = (sub) => calcEurMonthly(sub, exchangeRates);

@@ -10,7 +10,7 @@ import Modal from '../components/Modal';
 import BulkEditModal from '../components/BulkEditModal';
 import { toast } from '../lib/toast';
 import { addDays, isBefore } from 'date-fns';
-import { toMonthly } from '../lib/costUtils';
+import { toMonthly, countActiveAccountsNow } from '../lib/costUtils';
 import { formatDate, formatDateLong, currencySymbol } from '../lib/format';
 
 const EXPORT_FIELDS = [
@@ -159,13 +159,20 @@ function SubRow({ sub, onView, showUrgency, isSelectable, isSelected, onToggleSe
           <SubLogo vendor={sub.vendor} name={sub.name} />
           <div>
             <p className="font-semibold text-dark text-sm">{sub.name}</p>
-            {(sub.vendor || sub.account_owner) && (
-              <p className="text-xs text-slate-400 mt-0.5">
-                {sub.vendor}
-                {sub.vendor && sub.account_owner && <span className="mx-1">·</span>}
-                {sub.account_owner && <span className="text-slate-500">{sub.account_owner}</span>}
-              </p>
-            )}
+            {(() => {
+              const hasAccounts = sub.accounts?.length > 0;
+              const activeCount = hasAccounts ? countActiveAccountsNow(sub.accounts) : 0;
+              const subtitle = hasAccounts
+                ? `${activeCount} actieve account${activeCount !== 1 ? 's' : ''}`
+                : sub.account_owner;
+              return (sub.vendor || subtitle) && (
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {sub.vendor}
+                  {sub.vendor && subtitle && <span className="mx-1">·</span>}
+                  {subtitle && <span className="text-slate-500">{subtitle}</span>}
+                </p>
+              );
+            })()}
           </div>
         </div>
       </td>
@@ -319,7 +326,7 @@ function Section({ title, rows, onView, showUrgency, accent, isSelectable, selec
 }
 
 function SubscriptionsPage() {
-  const { subscriptions, loading, addSubscription, updateSubscription, deleteSubscription } = useSubscriptions();
+  const { subscriptions, loading, addSubscription, updateSubscription, deleteSubscription, refetch } = useSubscriptions();
   const { categories: settingCategories, types, departments: settingDepartments, addCategory, addType, addDepartment } = useSettings();
   const { isAdmin } = useCurrentUser();
   const [search, setSearch] = useState('');
@@ -441,9 +448,12 @@ function SubscriptionsPage() {
       : await addSubscription(subData);
     if (result?.error) {
       setSaveError(`Opslaan mislukt: ${result.error.message}`);
-      return;
+      return result;
     }
     setModalOpen(false);
+    // Refetch zodat de net opgeslagen accounts ook meekomen in de UI
+    setTimeout(() => refetch(), 100);
+    return result;
   };
 
   const handleExportCSV = (selectedFields) => {

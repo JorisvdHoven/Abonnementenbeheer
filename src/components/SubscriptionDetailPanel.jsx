@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { XMarkIcon, PencilSquareIcon, TrashIcon, DocumentArrowDownIcon } from '@heroicons/react/24/outline';
 import { SubLogo } from './SubLogo';
-import { toMonthly } from '../lib/costUtils';
+import { toMonthly, countActiveAccountsNow } from '../lib/costUtils';
 import { formatDate, formatDateLong, currencySymbol } from '../lib/format';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useLatestAuditFor } from '../hooks/useAuditLog';
@@ -43,6 +43,12 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
     ? toMonthly(sub.cost, sub.cost_period)
     : null;
 
+  const hasAccounts = sub.accounts && sub.accounts.length > 0;
+  const activeAccountCount = hasAccounts ? countActiveAccountsNow(sub.accounts) : 0;
+  const multiplier = hasAccounts
+    ? activeAccountCount
+    : (sub.cost_per_seat ? (sub.seats || 1) : 1);
+
   const statusColors = {
     actief:   'bg-green-100 text-green-700',
     verlopen: 'bg-red-100 text-red-600',
@@ -78,20 +84,57 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-3">
           <Section title="Abonnement">
-            <DetailRow label="Account van" value={sub.account_owner} />
+            {!hasAccounts && <DetailRow label="Account van" value={sub.account_owner} />}
             <DetailRow label="Categorie" value={sub.category} />
             <DetailRow label="Type" value={sub.type} />
             <DetailRow label="Afdeling" value={sub.department} />
-            <DetailRow label="Seats" value={sub.seats} />
+            {hasAccounts
+              ? <DetailRow label="Actieve accounts" value={`${activeAccountCount} van ${sub.accounts.length}`} />
+              : <DetailRow label="Seats" value={sub.seats} />
+            }
           </Section>
 
+          {hasAccounts && (
+            <Section title="Accounts">
+              <div className="space-y-1">
+                {sub.accounts.map(acc => {
+                  const today = new Date();
+                  const start = acc.start_date ? new Date(acc.start_date) : null;
+                  const end = acc.end_date ? new Date(acc.end_date) : null;
+                  const isActive = (!start || start <= today) && (!end || end >= today);
+                  const isFuture = start && start > today;
+                  const stateLabel = isActive ? 'Actief' : isFuture ? 'Toekomstig' : 'Beëindigd';
+                  const stateColor = isActive ? 'bg-green-100 text-green-700' : isFuture ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500';
+                  return (
+                    <div key={acc.id} className="flex items-center justify-between py-1.5 border-b border-slate-100 last:border-0">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-dark truncate">{acc.owner_name || '— zonder naam —'}</p>
+                        <p className="text-xs text-slate-400">
+                          {acc.start_date ? formatDate(acc.start_date) : '?'}
+                          {' → '}
+                          {acc.end_date ? formatDate(acc.end_date) : '∞'}
+                        </p>
+                      </div>
+                      <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${stateColor}`}>{stateLabel}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </Section>
+          )}
+
           <Section title="Kosten">
-            <DetailRow label="Kosten" value={`${currencySymbol(sub.currency)}${sub.cost}${sub.cost_period ? ` (${sub.cost_period})` : ''}${sub.cost_per_seat ? ` × ${sub.seats || 1} seats` : ''}`} />
+            <DetailRow
+              label="Kosten"
+              value={`${currencySymbol(sub.currency)}${sub.cost}${sub.cost_period ? ` (${sub.cost_period})` : ''}${
+                hasAccounts ? ` × ${activeAccountCount} accounts` : sub.cost_per_seat ? ` × ${sub.seats || 1} seats` : ''
+              }`}
+            />
             {monthly !== null && sub.cost_period !== 'Maandelijks' && (
-              <DetailRow label="Per maand" value={`€${(monthly * (sub.cost_per_seat ? (sub.seats || 1) : 1)).toFixed(2)}`} />
+              <DetailRow label="Per maand" value={`€${(monthly * multiplier).toFixed(2)}`} />
             )}
             {monthly !== null && (
-              <DetailRow label="Per jaar" value={`€${(monthly * (sub.cost_per_seat ? (sub.seats || 1) : 1) * 12).toFixed(2)}`} />
+              <DetailRow label="Per jaar" value={`€${(monthly * multiplier * 12).toFixed(2)}`} />
             )}
           </Section>
 

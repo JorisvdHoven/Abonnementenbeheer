@@ -1,20 +1,100 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { BILLING_PERIODS, toMonthly } from '../lib/costUtils';
 import { currencySymbol } from '../lib/format';
+import { ChevronDownIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { SubLogo } from './SubLogo';
 import Modal from './Modal';
 
-function AddableSelect({ label, value, options, onChange, onAdd, error, required, tooltip }) {
+// ============================================================
+// Layout primitives — modern, minimaal
+// ============================================================
+
+function Section({ label, hint, children }) {
+  return (
+    <section className="space-y-3">
+      <div>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</h3>
+        {hint && <p className="text-xs text-slate-400 mt-0.5">{hint}</p>}
+      </div>
+      <div className="space-y-3">{children}</div>
+    </section>
+  );
+}
+
+function CollapsibleSection({ label, hint, defaultOpen = false, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section className="space-y-3">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center justify-between w-full text-left group"
+      >
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 group-hover:text-slate-700 transition-colors">{label}</h3>
+          {hint && <p className="text-xs text-slate-400 mt-0.5">{hint}</p>}
+        </div>
+        <ChevronDownIcon className={`h-4 w-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && <div className="space-y-3">{children}</div>}
+    </section>
+  );
+}
+
+function Field({ label, hint, error, required, value, children }) {
+  return (
+    <div>
+      <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700 mb-1.5">
+        {label}
+        {required && <span className={value ? 'text-slate-400' : 'text-red-500'}>*</span>}
+      </label>
+      {children}
+      {error
+        ? <p className="mt-1 text-xs text-red-600">{error}</p>
+        : hint && <p className="mt-1 text-xs text-slate-400">{hint}</p>}
+    </div>
+  );
+}
+
+function FieldGrid({ children }) {
+  return <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{children}</div>;
+}
+
+function ToggleSwitch({ checked, onChange, label, hint }) {
+  return (
+    <label className="flex items-start justify-between gap-3 cursor-pointer">
+      <div className="flex-1">
+        <span className="text-sm font-medium text-slate-700">{label}</span>
+        {hint && <p className="text-xs text-slate-400 mt-0.5">{hint}</p>}
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full transition-colors mt-0.5 ${checked ? 'bg-primary' : 'bg-slate-200'}`}
+      >
+        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform translate-y-0.5 ${checked ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
+      </button>
+    </label>
+  );
+}
+
+const inputClass = 'block w-full px-3 py-2 rounded-md border border-slate-200 bg-white text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors';
+const inputClassError = 'block w-full px-3 py-2 rounded-md border border-red-300 bg-red-50/40 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-400 transition-colors';
+
+// ============================================================
+// AddableSelect — combobox met inline "+ toevoegen"
+// ============================================================
+
+function AddableSelect({ label, value, options, onChange, onAdd, error, required, hint }) {
   const [adding, setAdding] = useState(false);
   const [newValue, setNewValue] = useState('');
 
   const handleSelect = (e) => {
-    if (e.target.value === '__new__') {
-      setAdding(true);
-    } else {
-      onChange(e.target.value);
-    }
+    if (e.target.value === '__new__') setAdding(true);
+    else onChange(e.target.value);
   };
 
   const handleConfirm = async () => {
@@ -27,22 +107,9 @@ function AddableSelect({ label, value, options, onChange, onAdd, error, required
   };
 
   return (
-    <div>
-      <div className="flex items-center gap-1.5">
-        <label className="text-sm font-medium text-gray-700">
-          {label}{required && <span className={`ml-0.5 ${value ? 'text-gray-900' : 'text-red-500'}`}>*</span>}
-        </label>
-        {tooltip && (
-          <div className="relative group mb-0.5">
-            <span className="flex items-center justify-center w-4 h-4 rounded-full bg-slate-300 text-white text-xs font-bold cursor-default select-none">i</span>
-            <span className="absolute left-6 top-1/2 -translate-y-1/2 z-10 hidden group-hover:block w-64 rounded-md bg-slate-800 text-white text-xs p-3 shadow-lg font-normal">
-              {tooltip}
-            </span>
-          </div>
-        )}
-      </div>
+    <Field label={label} required={required} value={value} error={error} hint={hint}>
       {adding ? (
-        <div className="mt-1 flex gap-2">
+        <div className="flex gap-2">
           <input
             type="text"
             value={newValue}
@@ -50,16 +117,16 @@ function AddableSelect({ label, value, options, onChange, onAdd, error, required
             placeholder={`Nieuwe ${label.toLowerCase()}...`}
             autoFocus
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleConfirm(); } }}
-            className="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-primary focus:border-primary"
+            className={inputClass}
           />
-          <button type="button" onClick={handleConfirm} className="btn-primary whitespace-nowrap">Toevoegen</button>
-          <button type="button" onClick={() => { setAdding(false); setNewValue(''); }} className="btn-secondary">✕</button>
+          <button type="button" onClick={handleConfirm} className="btn-primary whitespace-nowrap text-sm">Toevoegen</button>
+          <button type="button" onClick={() => { setAdding(false); setNewValue(''); }} className="btn-secondary text-sm">✕</button>
         </div>
       ) : (
         <select
           value={value}
           onChange={handleSelect}
-          className={`mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-primary focus:border-primary ${error ? 'border-red-400' : 'border-gray-300'}`}
+          className={error ? inputClassError : inputClass}
         >
           <option value="">Kies een {label.toLowerCase()}</option>
           {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
@@ -67,38 +134,124 @@ function AddableSelect({ label, value, options, onChange, onAdd, error, required
           <option value="__new__">+ Nieuwe {label.toLowerCase()} toevoegen</option>
         </select>
       )}
-      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+    </Field>
+  );
+}
+
+// ============================================================
+// Accounts manager — inline list met add/remove
+// ============================================================
+
+function AccountsManager({ accounts, onChange, costPerAccount, currency, period }) {
+  const addAccount = () => {
+    onChange([...accounts, { _tempId: crypto.randomUUID(), owner_name: '', start_date: '', end_date: '' }]);
+  };
+
+  const updateAccount = (idx, patch) => {
+    onChange(accounts.map((a, i) => i === idx ? { ...a, ...patch } : a));
+  };
+
+  const removeAccount = (idx) => {
+    onChange(accounts.filter((_, i) => i !== idx));
+  };
+
+  const sym = currencySymbol(currency);
+  const monthlyPerAccount = toMonthly(parseFloat(costPerAccount) || 0, period);
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50/50 overflow-hidden">
+      <div className="px-3.5 py-2.5 bg-slate-100/70 flex items-center justify-between text-xs">
+        <span className="font-medium text-slate-600">{accounts.length} account{accounts.length !== 1 ? 's' : ''}</span>
+        {monthlyPerAccount > 0 && (
+          <span className="text-slate-500">≈ {sym}{monthlyPerAccount.toFixed(2)} per account/mnd</span>
+        )}
+      </div>
+      {accounts.length === 0 ? (
+        <div className="p-6 text-center">
+          <p className="text-sm text-slate-400">Nog geen accounts toegevoegd.</p>
+          <button type="button" onClick={addAccount} className="btn-primary text-sm mt-3 inline-flex items-center gap-1.5">
+            <PlusIcon className="h-4 w-4" />
+            Eerste account toevoegen
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="divide-y divide-slate-200">
+            {accounts.map((account, idx) => (
+              <div key={account.id ?? account._tempId ?? idx} className="p-3 grid grid-cols-1 sm:grid-cols-[1fr,140px,140px,auto] gap-2 items-end">
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Naam medewerker</label>
+                  <input
+                    type="text"
+                    value={account.owner_name || ''}
+                    onChange={(e) => updateAccount(idx, { owner_name: e.target.value })}
+                    placeholder="Bijv. Joris van den Hoven"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Startdatum</label>
+                  <input
+                    type="date"
+                    value={account.start_date || ''}
+                    onChange={(e) => updateAccount(idx, { start_date: e.target.value })}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Einddatum</label>
+                  <input
+                    type="date"
+                    value={account.end_date || ''}
+                    onChange={(e) => updateAccount(idx, { end_date: e.target.value })}
+                    className={inputClass}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeAccount(idx)}
+                  className="h-9 w-9 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                  aria-label="Account verwijderen"
+                >
+                  <TrashIcon className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={addAccount}
+            className="w-full py-2.5 text-sm font-medium text-primary hover:bg-primary/5 transition-colors flex items-center justify-center gap-1.5 border-t border-slate-200"
+          >
+            <PlusIcon className="h-4 w-4" />
+            Account toevoegen
+          </button>
+        </>
+      )}
     </div>
   );
 }
 
+// ============================================================
+// Hoofd-component
+// ============================================================
+
 function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [], departmentOptions = [], onAddCategory, onAddType, onAddDepartment, onSave, onClose, saveError }) {
   const [formData, setFormData] = useState({
-    name: '',
-    vendor: '',
-    account_owner: '',
-    contact_name: '',
-    contact_email: '',
-    contact_phone: '',
-    category: '',
-    type: '',
-    department: '',
-    cost: '',
-    currency: 'EUR',
-    cost_period: '',
-    seats: 1,
-    cost_per_seat: false,
-    start_date: '',
-    end_date: '',
-    renewal_date: '',
-    status: 'actief',
-    auto_renew: false,
-    terms: '',
-    notes: '',
-    document_name: '',
-    document_type: '',
-    document_content: ''
+    name: '', vendor: '', account_owner: '',
+    contact_name: '', contact_email: '', contact_phone: '',
+    category: '', type: '', department: '',
+    cost: '', currency: 'EUR', cost_period: '',
+    seats: 1, cost_per_seat: false,
+    start_date: '', end_date: '', renewal_date: '',
+    status: 'actief', auto_renew: false,
+    terms: '', notes: '',
+    document_name: '', document_type: '', document_content: ''
   });
+
+  const [accounts, setAccounts] = useState([]);
+  const [multiAccount, setMultiAccount] = useState(false);
+  const initialAccountsRef = useRef([]);
 
   useEffect(() => {
     if (subscription) {
@@ -128,36 +281,38 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
         document_type: subscription.document_type || '',
         document_content: subscription.document_content || ''
       });
+
+      const subAccounts = subscription.accounts || [];
+      if (subAccounts.length > 0) {
+        setMultiAccount(true);
+        const formatted = subAccounts.map(a => ({
+          id: a.id,
+          owner_name: a.owner_name || '',
+          start_date: a.start_date ? a.start_date.split('T')[0] : '',
+          end_date: a.end_date ? a.end_date.split('T')[0] : '',
+        }));
+        setAccounts(formatted);
+        initialAccountsRef.current = formatted;
+      }
     }
   }, [subscription]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
+    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
-
     if (!file) {
-      setFormData(prev => ({
-        ...prev,
-        document_name: '',
-        document_type: '',
-        document_content: ''
-      }));
+      setFormData(prev => ({ ...prev, document_name: '', document_type: '', document_content: '' }));
       return;
     }
-
     if (file.size > 5 * 1024 * 1024) {
       alert('Kies een document kleiner dan 5 MB.');
       e.target.value = '';
       return;
     }
-
     const reader = new FileReader();
     reader.onload = () => {
       setFormData(prev => ({
@@ -171,53 +326,76 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
   };
 
   const handleRemoveDocument = () => {
-    setFormData(prev => ({
-      ...prev,
-      document_name: '',
-      document_type: '',
-      document_content: ''
-    }));
+    setFormData(prev => ({ ...prev, document_name: '', document_type: '', document_content: '' }));
   };
 
   const [fieldErrors, setFieldErrors] = useState({});
   const [debouncedName, setDebouncedName] = useState(formData.name);
   const [debouncedVendor, setDebouncedVendor] = useState(formData.vendor);
 
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedName(formData.name), 1000);
-    return () => clearTimeout(t);
-  }, [formData.name]);
-
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedVendor(formData.vendor), 1000);
-    return () => clearTimeout(t);
-  }, [formData.vendor]);
+  useEffect(() => { const t = setTimeout(() => setDebouncedName(formData.name), 1000); return () => clearTimeout(t); }, [formData.name]);
+  useEffect(() => { const t = setTimeout(() => setDebouncedVendor(formData.vendor), 1000); return () => clearTimeout(t); }, [formData.vendor]);
 
   const validate = () => {
     const errors = {};
-    if (!formData.name.trim())
-      errors.name = 'Naam is verplicht.';
-    if (!formData.type)
-      errors.type = 'Type is verplicht.';
-    if (!formData.department)
-      errors.department = 'Afdeling is verplicht.';
+    if (!formData.name.trim()) errors.name = 'Naam is verplicht.';
+    if (!formData.type) errors.type = 'Type is verplicht.';
+    if (!formData.department) errors.department = 'Afdeling is verplicht.';
     if (formData.contact_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.contact_email))
       errors.contact_email = 'Voer een geldig e-mailadres in.';
     if (formData.cost !== '' && (isNaN(parseFloat(formData.cost)) || parseFloat(formData.cost) < 0))
       errors.cost = 'Voer een geldig bedrag in (bijv. 9.99).';
-    if (formData.seats !== '' && (isNaN(parseInt(formData.seats)) || parseInt(formData.seats) < 1))
+    if (!multiAccount && formData.seats !== '' && (isNaN(parseInt(formData.seats)) || parseInt(formData.seats) < 1))
       errors.seats = 'Aantal seats moet minimaal 1 zijn.';
-    if (formData.start_date && isNaN(Date.parse(formData.start_date)))
-      errors.start_date = 'Datum niet juist ingevoerd.';
-    if (formData.end_date && isNaN(Date.parse(formData.end_date)))
-      errors.end_date = 'Datum niet juist ingevoerd.';
+    if (formData.start_date && isNaN(Date.parse(formData.start_date))) errors.start_date = 'Datum niet juist ingevoerd.';
+    if (formData.end_date && isNaN(Date.parse(formData.end_date))) errors.end_date = 'Datum niet juist ingevoerd.';
     if (formData.end_date && formData.start_date && new Date(formData.end_date) < new Date(formData.start_date))
       errors.end_date = 'Einddatum mag niet vóór de startdatum liggen.';
-    if (formData.renewal_date && isNaN(Date.parse(formData.renewal_date)))
-      errors.renewal_date = 'Datum niet juist ingevoerd.';
+    if (formData.renewal_date && isNaN(Date.parse(formData.renewal_date))) errors.renewal_date = 'Datum niet juist ingevoerd.';
     if (formData.status === 'actief' && formData.end_date && new Date(formData.end_date) < new Date())
       errors.status = 'Status kan niet actief zijn als de einddatum al verlopen is.';
     return errors;
+  };
+
+  const persistAccounts = async (subscriptionId) => {
+    // Vergelijk huidige accounts state met initial ref → insert nieuwe, update bestaande, delete verwijderde
+    const initial = initialAccountsRef.current;
+    const initialIds = new Set(initial.map(a => a.id).filter(Boolean));
+    const currentIds = new Set(accounts.map(a => a.id).filter(Boolean));
+
+    // Delete: ids in initial maar niet in current
+    const toDelete = [...initialIds].filter(id => !currentIds.has(id));
+    if (toDelete.length > 0) {
+      await supabase.from('subscription_accounts').delete().in('id', toDelete);
+    }
+
+    // Insert: items zonder id
+    const toInsert = accounts.filter(a => !a.id).map(a => ({
+      subscription_id: subscriptionId,
+      owner_name: a.owner_name || null,
+      start_date: a.start_date || null,
+      end_date: a.end_date || null,
+    }));
+    if (toInsert.length > 0) {
+      await supabase.from('subscription_accounts').insert(toInsert);
+    }
+
+    // Update: items met id, vergelijk met initial
+    for (const a of accounts) {
+      if (!a.id) continue;
+      const orig = initial.find(o => o.id === a.id);
+      if (!orig) continue;
+      const changed = orig.owner_name !== a.owner_name || orig.start_date !== a.start_date || orig.end_date !== a.end_date;
+      if (changed) {
+        // eslint-disable-next-line no-await-in-loop
+        await supabase.from('subscription_accounts').update({
+          owner_name: a.owner_name || null,
+          start_date: a.start_date || null,
+          end_date: a.end_date || null,
+          updated_at: new Date().toISOString(),
+        }).eq('id', a.id);
+      }
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -228,350 +406,296 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
       return;
     }
     setFieldErrors({});
+
     const { data: { user } } = await supabase.auth.getUser();
+
+    // Bij multi-account modus: account_owner en seats spelen geen rol meer
     const dataToSave = {
       ...formData,
+      account_owner: multiAccount ? null : (formData.account_owner || null),
       category: formData.category || 'Overig',
       cost: parseFloat(formData.cost) || 0,
-      seats: parseInt(formData.seats) || 1,
+      seats: multiAccount ? 1 : (parseInt(formData.seats) || 1),
+      cost_per_seat: multiAccount ? false : formData.cost_per_seat,
       start_date: formData.start_date || null,
       end_date: formData.end_date || null,
       renewal_date: formData.renewal_date || null,
       created_by: user?.id
     };
-    await onSave(dataToSave);
+
+    const result = await onSave(dataToSave);
+    if (result?.error) return;
+
+    const savedSub = result?.data ?? subscription;
+    if (savedSub?.id) {
+      if (multiAccount) {
+        await persistAccounts(savedSub.id);
+      } else if (initialAccountsRef.current.length > 0) {
+        // Toggle uitgezet → alle accounts verwijderen
+        await supabase.from('subscription_accounts').delete().eq('subscription_id', savedSub.id);
+      }
+    }
   };
+
+  const monthlyPreview = (() => {
+    const baseMonthly = toMonthly(parseFloat(formData.cost) || 0, formData.cost_period);
+    if (!baseMonthly) return null;
+    if (multiAccount) {
+      const activeNow = accounts.filter(a => {
+        const today = new Date();
+        const start = a.start_date ? new Date(a.start_date) : null;
+        const end = a.end_date ? new Date(a.end_date) : null;
+        if (start && start > today) return false;
+        if (end && end < today) return false;
+        return true;
+      }).length;
+      if (activeNow === 0) return null;
+      return baseMonthly * activeNow;
+    }
+    const seats = parseInt(formData.seats) || 1;
+    return baseMonthly * (formData.cost_per_seat ? seats : 1);
+  })();
+
+  const sym = currencySymbol(formData.currency);
 
   return (
     <Modal onClose={onClose} size="2xl" scrollable ariaLabel={subscription ? 'Abonnement bewerken' : 'Nieuw abonnement'}>
-      <div className="p-6">
-          <div className="flex items-center gap-4 mb-5">
-            {(debouncedVendor || debouncedName) && (
-              <SubLogo vendor={debouncedVendor} name={debouncedName} size="xl" />
+      {/* Header */}
+      <div className="px-6 py-5 border-b border-slate-100">
+        <div className="flex items-center gap-4">
+          {(debouncedVendor || debouncedName) && (
+            <SubLogo vendor={debouncedVendor} name={debouncedName} size="xl" />
+          )}
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">{subscription ? 'Bewerk abonnement' : 'Nieuw abonnement'}</h2>
+            {(formData.name || formData.vendor) && (
+              <p className="text-sm text-slate-400 mt-0.5">{formData.vendor || formData.name}</p>
             )}
-            <div>
-              <h2 className="text-xl font-bold">{subscription ? 'Bewerk abonnement' : 'Nieuw abonnement'}</h2>
-              {(formData.name || formData.vendor) && (
-                <p className="text-sm text-slate-400 mt-0.5">{formData.vendor || formData.name}</p>
-              )}
-            </div>
           </div>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Naam <span className={formData.name.trim() ? 'text-gray-900' : 'text-red-500'}>*</span></label>
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  className={`mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-primary focus:border-primary ${fieldErrors.name ? 'border-red-400' : 'border-gray-300'}`}
-                />
-                {fieldErrors.name && <p className="mt-1 text-xs text-red-600">{fieldErrors.name}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Leverancier</label>
-                <input
-                  type="text"
-                  name="vendor"
-                  value={formData.vendor}
-                  onChange={handleChange}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                />
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <label className="block text-sm font-medium text-gray-700">Account van</label>
-                  <div className="relative group mb-0.5">
-                    <span className="flex items-center justify-center w-4 h-4 rounded-full bg-slate-300 text-white text-xs font-bold cursor-default select-none">i</span>
-                    <span className="absolute left-6 top-1/2 -translate-y-1/2 z-10 hidden group-hover:block w-64 rounded-md bg-slate-800 text-white text-xs p-3 shadow-lg font-normal">
-                      De interne medewerker bij wie dit account hoort. Handig als meerdere collega's hetzelfde soort account hebben (bijv. OpenAI). Optioneel.
-                    </span>
-                  </div>
-                </div>
-                <input
-                  type="text"
-                  name="account_owner"
-                  value={formData.account_owner}
-                  onChange={handleChange}
-                  placeholder="Bijv. Joris van den Hoven"
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Contactpersoon</label>
-                <input
-                  type="text"
-                  name="contact_name"
-                  value={formData.contact_name}
-                  onChange={handleChange}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">E-mail contact</label>
-                <input
-                  type="text"
-                  name="contact_email"
-                  value={formData.contact_email}
-                  onChange={handleChange}
-                  className={`mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-primary focus:border-primary ${fieldErrors.contact_email ? 'border-red-400' : 'border-gray-300'}`}
-                />
-                {fieldErrors.contact_email && <p className="mt-1 text-xs text-red-600">{fieldErrors.contact_email}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Telefoon contact</label>
-                <input
-                  type="tel"
-                  name="contact_phone"
-                  value={formData.contact_phone}
-                  onChange={handleChange}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                />
-              </div>
-              <AddableSelect
-                label="Categorie"
-                value={formData.category}
-                options={categoryOptions}
-                onChange={(val) => setFormData(prev => ({ ...prev, category: val }))}
-                onAdd={onAddCategory}
-                error={fieldErrors.category}
-                tooltip="Categorie geeft aan tot welk bedrijfsonderdeel of kostenpost een abonnement behoort. Wordt gebruikt voor de kostengrafiek op het dashboard en voor filteren. Als je niets kiest, wordt automatisch 'Overig' gebruikt."
+        </div>
+      </div>
+
+      {/* Body */}
+      <form id="sub-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-7">
+        {/* Basis */}
+        <Section label="Basis">
+          <FieldGrid>
+            <Field label="Naam" required value={formData.name} error={fieldErrors.name}>
+              <input
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                placeholder="Bijv. LinkedIn Pro"
+                className={fieldErrors.name ? inputClassError : inputClass}
               />
-              <AddableSelect
-                label="Type"
-                value={formData.type}
-                options={typeOptions}
-                onChange={(val) => setFormData(prev => ({ ...prev, type: val }))}
-                onAdd={onAddType}
-                error={fieldErrors.type}
-                required
-                tooltip="Type geeft aan op welke manier een abonnement wordt afgerekend. Voorbeelden: Licentie, Abonnement, Pay-per-use, Eenmalig."
-              />
-              <AddableSelect
-                label="Afdeling"
-                value={formData.department}
-                options={departmentOptions}
-                onChange={(val) => setFormData(prev => ({ ...prev, department: val }))}
-                onAdd={onAddDepartment}
-                error={fieldErrors.department}
-                required
-                tooltip="Afdeling is verplicht zodat kosten per afdeling correct worden bijgehouden. Voorbeelden: Facilitair, Sales, Finance, IT, HR. Gebruik 'Overig' voor abonnementen die niet onder een specifieke afdeling vallen."
-              />
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Kosten</label>
-                <div className="mt-1 flex">
-                  <select
-                    name="currency"
-                    value={formData.currency}
-                    onChange={handleChange}
-                    className="px-2 py-2 border border-r-0 border-gray-300 rounded-l-md bg-gray-50 text-sm focus:outline-none focus:ring-primary focus:border-primary"
-                  >
-                    <option value="EUR">€ EUR</option>
-                    <option value="USD">$ USD</option>
-                    <option value="GBP">£ GBP</option>
-                    <option value="CHF">Fr. CHF</option>
-                  </select>
-                  <input
-                    type="number"
-                    step="0.01"
-                    name="cost"
-                    value={formData.cost}
-                    onChange={handleChange}
-                    className={`block w-full px-3 py-2 border rounded-r-md focus:outline-none focus:ring-primary focus:border-primary ${fieldErrors.cost ? 'border-red-400' : 'border-gray-300'}`}
-                  />
-                </div>
-                {fieldErrors.cost && <p className="mt-1 text-xs text-red-600">{fieldErrors.cost}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Facturatieperiode</label>
-                <select
-                  name="cost_period"
-                  value={formData.cost_period}
-                  onChange={handleChange}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                >
-                  <option value="">Kies een periode</option>
-                  {BILLING_PERIODS.map(p => (
-                    <option key={p.value} value={p.value}>{p.label}</option>
-                  ))}
+            </Field>
+            <Field label="Leverancier" value={formData.vendor}>
+              <input type="text" name="vendor" value={formData.vendor} onChange={handleChange} placeholder="Bijv. Microsoft" className={inputClass} />
+            </Field>
+            <Field label="Status" value={formData.status} error={fieldErrors.status}>
+              <select name="status" value={formData.status} onChange={handleChange} className={fieldErrors.status ? inputClassError : inputClass}>
+                <option value="actief">Actief</option>
+                <option value="verlopen">Verlopen</option>
+                <option value="opgezegd">Opgezegd</option>
+              </select>
+            </Field>
+          </FieldGrid>
+        </Section>
+
+        <hr className="border-slate-100" />
+
+        {/* Kosten & facturatie */}
+        <Section label="Kosten & facturatie">
+          <FieldGrid>
+            <Field label={multiAccount ? 'Kosten per account' : 'Kosten'} value={formData.cost} error={fieldErrors.cost}>
+              <div className="flex">
+                <select name="currency" value={formData.currency} onChange={handleChange} className="px-2 py-2 border border-slate-200 border-r-0 rounded-l-md bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                  <option value="EUR">€ EUR</option>
+                  <option value="USD">$ USD</option>
+                  <option value="GBP">£ GBP</option>
+                  <option value="CHF">Fr. CHF</option>
                 </select>
-                {formData.cost_period && formData.cost_period !== 'Maandelijks' && formData.cost_period !== 'Eenmalig' && formData.cost !== '' && (
-                  <p className="mt-1 text-xs text-slate-500">
-                    ≈ {currencySymbol(formData.currency)}{(toMonthly(parseFloat(formData.cost), formData.cost_period) * (formData.cost_per_seat ? (parseInt(formData.seats) || 1) : 1)).toFixed(2)} per maand{formData.cost_per_seat && parseInt(formData.seats) > 1 ? ` (${formData.seats} seats)` : ''}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Seats</label>
                 <input
                   type="number"
-                  name="seats"
-                  value={formData.seats}
+                  step="0.01"
+                  name="cost"
+                  value={formData.cost}
                   onChange={handleChange}
-                  className={`mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-primary focus:border-primary ${fieldErrors.seats ? 'border-red-400' : 'border-gray-300'}`}
+                  className={`block w-full px-3 py-2 rounded-r-md border ${fieldErrors.cost ? 'border-red-300 bg-red-50/40' : 'border-slate-200'} text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary`}
                 />
-                {fieldErrors.seats && <p className="mt-1 text-xs text-red-600">{fieldErrors.seats}</p>}
-                <div className="mt-2 flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="cost_per_seat"
-                    name="cost_per_seat"
-                    checked={formData.cost_per_seat}
-                    onChange={handleChange}
-                    className="rounded border-gray-300 text-primary focus:ring-primary"
-                  />
-                  <label htmlFor="cost_per_seat" className="text-sm text-gray-600">Prijs per seat</label>
-                  <div className="relative group">
-                    <span className="flex items-center justify-center w-4 h-4 rounded-full bg-slate-300 text-white text-xs font-bold cursor-default select-none">i</span>
-                    <span className="absolute right-0 bottom-6 z-10 hidden group-hover:block w-72 rounded-md bg-slate-800 text-white text-xs p-3 shadow-lg font-normal">
-                      Als ingeschakeld wordt de kosten vermenigvuldigd met het aantal seats. Handig als je per gebruiker betaalt, bijv. €10 × 5 seats = €50 per maand.
-                    </span>
-                  </div>
+              </div>
+            </Field>
+            <Field label="Facturatieperiode" value={formData.cost_period}>
+              <select name="cost_period" value={formData.cost_period} onChange={handleChange} className={inputClass}>
+                <option value="">Kies een periode</option>
+                {BILLING_PERIODS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+              </select>
+            </Field>
+          </FieldGrid>
+
+          {monthlyPreview !== null && (
+            <div className="text-xs text-slate-500 -mt-1">
+              ≈ {sym}{monthlyPreview.toFixed(2)} per maand totaal
+            </div>
+          )}
+
+          <div className="rounded-lg bg-slate-50 border border-slate-100 px-4 py-3">
+            <ToggleSwitch
+              label="Heeft meerdere accounts"
+              hint="Voor abonnementen waar elke medewerker een eigen account heeft (bv. LinkedIn Pro, Adobe). Elk account heeft een eigen start- en einddatum."
+              checked={multiAccount}
+              onChange={setMultiAccount}
+            />
+          </div>
+
+          {multiAccount ? (
+            <AccountsManager
+              accounts={accounts}
+              onChange={setAccounts}
+              costPerAccount={formData.cost}
+              currency={formData.currency}
+              period={formData.cost_period}
+            />
+          ) : (
+            <FieldGrid>
+              <Field label="Aantal seats" value={formData.seats} error={fieldErrors.seats}>
+                <input type="number" name="seats" value={formData.seats} onChange={handleChange} className={fieldErrors.seats ? inputClassError : inputClass} />
+              </Field>
+              <div className="flex items-end pb-1">
+                <ToggleSwitch
+                  label="Prijs per seat"
+                  hint="Vermenigvuldig kosten met aantal seats."
+                  checked={formData.cost_per_seat}
+                  onChange={(v) => setFormData(prev => ({ ...prev, cost_per_seat: v }))}
+                />
+              </div>
+            </FieldGrid>
+          )}
+        </Section>
+
+        <hr className="border-slate-100" />
+
+        {/* Categorisatie */}
+        <Section label="Categorisatie">
+          <FieldGrid>
+            <AddableSelect
+              label="Afdeling"
+              value={formData.department}
+              options={departmentOptions}
+              onChange={(v) => setFormData(prev => ({ ...prev, department: v }))}
+              onAdd={onAddDepartment}
+              error={fieldErrors.department}
+              required
+            />
+            <AddableSelect
+              label="Type"
+              value={formData.type}
+              options={typeOptions}
+              onChange={(v) => setFormData(prev => ({ ...prev, type: v }))}
+              onAdd={onAddType}
+              error={fieldErrors.type}
+              required
+            />
+            <AddableSelect
+              label="Categorie"
+              value={formData.category}
+              options={categoryOptions}
+              onChange={(v) => setFormData(prev => ({ ...prev, category: v }))}
+              onAdd={onAddCategory}
+              error={fieldErrors.category}
+              hint="Optioneel — leeg = automatisch 'Overig'."
+            />
+          </FieldGrid>
+        </Section>
+
+        <hr className="border-slate-100" />
+
+        {/* Datums & verlenging */}
+        <Section label="Datums & verlenging">
+          <FieldGrid>
+            <Field label="Startdatum" value={formData.start_date} error={fieldErrors.start_date} hint={!fieldErrors.start_date ? 'Mag leeg gelaten worden.' : undefined}>
+              <input type="date" name="start_date" value={formData.start_date} onChange={handleChange} className={fieldErrors.start_date ? inputClassError : inputClass} />
+            </Field>
+            <Field label="Einddatum" value={formData.end_date} error={fieldErrors.end_date} hint={!fieldErrors.end_date ? 'Laat leeg als er geen vaste einddatum is.' : undefined}>
+              <input type="date" name="end_date" value={formData.end_date} onChange={handleChange} className={fieldErrors.end_date ? inputClassError : inputClass} />
+            </Field>
+            <Field label="Verlengingsdatum" value={formData.renewal_date} error={fieldErrors.renewal_date} hint={!fieldErrors.renewal_date ? 'Wordt gebruikt voor verloopmeldingen.' : undefined}>
+              <input type="date" name="renewal_date" value={formData.renewal_date} onChange={handleChange} className={fieldErrors.renewal_date ? inputClassError : inputClass} />
+            </Field>
+            <div className="flex items-end pb-1">
+              <ToggleSwitch
+                label="Auto-verlenging"
+                checked={formData.auto_renew}
+                onChange={(v) => setFormData(prev => ({ ...prev, auto_renew: v }))}
+              />
+            </div>
+          </FieldGrid>
+        </Section>
+
+        <hr className="border-slate-100" />
+
+        {/* Contact (collapsible) */}
+        <CollapsibleSection label="Contact" hint="Contactpersoon bij de leverancier — optioneel">
+          <FieldGrid>
+            {!multiAccount && (
+              <Field label="Account van" value={formData.account_owner} hint="De interne medewerker bij wie dit account hoort.">
+                <input type="text" name="account_owner" value={formData.account_owner} onChange={handleChange} placeholder="Bijv. Joris van den Hoven" className={inputClass} />
+              </Field>
+            )}
+            <Field label="Contactpersoon" value={formData.contact_name}>
+              <input type="text" name="contact_name" value={formData.contact_name} onChange={handleChange} className={inputClass} />
+            </Field>
+            <Field label="E-mail contact" value={formData.contact_email} error={fieldErrors.contact_email}>
+              <input type="text" name="contact_email" value={formData.contact_email} onChange={handleChange} className={fieldErrors.contact_email ? inputClassError : inputClass} />
+            </Field>
+            <Field label="Telefoon contact" value={formData.contact_phone}>
+              <input type="tel" name="contact_phone" value={formData.contact_phone} onChange={handleChange} className={inputClass} />
+            </Field>
+          </FieldGrid>
+        </CollapsibleSection>
+
+        <hr className="border-slate-100" />
+
+        {/* Extra (collapsible) */}
+        <CollapsibleSection label="Notities & document" hint="Contractvoorwaarden, bijlage, vrije notities">
+          <Field label="Contractvoorwaarden" value={formData.terms}>
+            <textarea name="terms" value={formData.terms} onChange={handleChange} rows={3} className={inputClass} />
+          </Field>
+          <Field label="Document" hint="PDF, Word, afbeelding of tekst tot 5 MB.">
+            <input type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt" onChange={handleFileChange} className={inputClass} />
+            {formData.document_name && (
+              <div className="mt-2 flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm">
+                <div>
+                  <div className="font-medium text-slate-700">Geselecteerd document</div>
+                  <div className="text-slate-500">{formData.document_name}</div>
                 </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Status</label>
-                <select
-                  name="status"
-                  value={formData.status}
-                  onChange={handleChange}
-                  className={`mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-primary focus:border-primary ${fieldErrors.status ? 'border-red-400' : 'border-gray-300'}`}
-                >
-                  <option value="actief">Actief</option>
-                  <option value="verlopen">Verlopen</option>
-                  <option value="opgezegd">Opgezegd</option>
-                </select>
-                {fieldErrors.status && <p className="mt-1 text-xs text-red-600">{fieldErrors.status}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Startdatum</label>
-                <input
-                  type="date"
-                  name="start_date"
-                  value={formData.start_date}
-                  onChange={handleChange}
-                  className={`mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-primary focus:border-primary ${fieldErrors.start_date ? 'border-red-400' : 'border-gray-300'}`}
-                />
-                {fieldErrors.start_date
-                  ? <p className="mt-1 text-xs text-red-600">{fieldErrors.start_date}</p>
-                  : <p className="mt-1 text-xs text-gray-400">Mag leeg gelaten worden.</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Einddatum</label>
-                <input
-                  type="date"
-                  name="end_date"
-                  value={formData.end_date}
-                  onChange={handleChange}
-                  className={`mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-primary focus:border-primary ${fieldErrors.end_date ? 'border-red-400' : 'border-gray-300'}`}
-                />
-                {fieldErrors.end_date
-                  ? <p className="mt-1 text-xs text-red-600">{fieldErrors.end_date}</p>
-                  : <p className="mt-1 text-xs text-gray-400">Laat leeg als er geen vaste einddatum is.</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Verlengingsdatum</label>
-                <input
-                  type="date"
-                  name="renewal_date"
-                  value={formData.renewal_date}
-                  onChange={handleChange}
-                  className={`mt-1 block w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-primary focus:border-primary ${fieldErrors.renewal_date ? 'border-red-400' : 'border-gray-300'}`}
-                />
-                {fieldErrors.renewal_date
-                  ? <p className="mt-1 text-xs text-red-600">{fieldErrors.renewal_date}</p>
-                  : <p className="mt-1 text-xs text-gray-400">Wordt gebruikt voor verloopmeldingen op het dashboard.</p>}
-              </div>
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  name="auto_renew"
-                  checked={formData.auto_renew}
-                  onChange={handleChange}
-                  className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                />
-                <label className="ml-2 block text-sm text-gray-900">Auto-verlenging</label>
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Contractvoorwaarden</label>
-              <textarea
-                name="terms"
-                value={formData.terms}
-                onChange={handleChange}
-                rows={3}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Document</label>
-              <input
-                type="file"
-                accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt"
-                onChange={handleFileChange}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-              />
-              <p className="mt-1 text-xs text-gray-500">Ondersteunt onder andere PDF, Word, afbeeldingen en tekstbestanden tot 5 MB.</p>
-              {formData.document_name && (
-                <div className="mt-2 flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm">
-                  <div>
-                    <div className="font-medium text-slate-700">Geselecteerd document</div>
-                    <div className="text-slate-500">{formData.document_name}</div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {formData.document_content && (
-                      <a
-                        href={formData.document_content}
-                        download={formData.document_name}
-                        className="text-primary hover:underline"
-                      >
-                        Open
-                      </a>
-                    )}
-                    <button
-                      type="button"
-                      onClick={handleRemoveDocument}
-                      className="text-red-600 hover:underline"
-                    >
-                      Verwijder document
-                    </button>
-                  </div>
+                <div className="flex items-center gap-3">
+                  {formData.document_content && (
+                    <a href={formData.document_content} download={formData.document_name} className="text-primary hover:underline">Open</a>
+                  )}
+                  <button type="button" onClick={handleRemoveDocument} className="text-red-500 hover:underline">Verwijder</button>
                 </div>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Notities</label>
-              <textarea
-                name="notes"
-                value={formData.notes}
-                onChange={handleChange}
-                rows={3}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-              />
-            </div>
-            {saveError && (
-              <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
-                {saveError}
               </div>
             )}
-            <div className="flex justify-end space-x-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="btn-secondary"
-              >
-                Annuleren
-              </button>
-              <button
-                type="submit"
-                className="btn-primary"
-              >
-                Opslaan
-              </button>
-            </div>
-          </form>
-        </div>
+          </Field>
+          <Field label="Notities" value={formData.notes}>
+            <textarea name="notes" value={formData.notes} onChange={handleChange} rows={3} className={inputClass} />
+          </Field>
+        </CollapsibleSection>
+
+        {saveError && (
+          <div className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+            {saveError}
+          </div>
+        )}
+      </form>
+
+      {/* Footer */}
+      <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 sticky bottom-0">
+        <button type="button" onClick={onClose} className="btn-secondary">Annuleren</button>
+        <button type="submit" form="sub-form" className="btn-primary">Opslaan</button>
+      </div>
     </Modal>
   );
 }
