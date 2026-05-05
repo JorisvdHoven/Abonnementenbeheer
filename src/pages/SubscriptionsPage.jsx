@@ -469,8 +469,8 @@ function SubscriptionsPage() {
     setBulkDeleting(false);
     setBulkDeleteOpen(false);
     clearSelection();
-    if (succeeded > 0) toast.success(`${succeeded} abonnement${succeeded !== 1 ? 'en' : ''} verwijderd.`);
-    if (failed > 0) toast.error(`${failed} abonnement${failed !== 1 ? 'en' : ''} kon${failed === 1 ? '' : 'den'} niet verwijderd worden.`);
+    if (succeeded > 0) toast.success(`${succeeded} abonnement${succeeded !== 1 ? 'en' : ''} verplaatst naar archief.`);
+    if (failed > 0) toast.error(`${failed} abonnement${failed !== 1 ? 'en' : ''} kon${failed === 1 ? '' : 'den'} niet gearchiveerd worden.`);
   };
 
   const handleBulkEdit = async (field, value) => {
@@ -580,11 +580,12 @@ function SubscriptionsPage() {
 
   if (loading) return <div className="p-6">Loading...</div>;
 
-  const totalMonthly = subscriptions
+  // Tellingen + totalen op basis van LIVE subs (gearchiveerd telt niet mee)
+  const totalMonthly = liveSubscriptions
     .filter(s => s.status === 'actief')
     .reduce((sum, s) => sum + (toMonthly(s.cost, s.cost_period) || 0), 0);
 
-  const activeCount = subscriptions.filter(s => s.status === 'actief').length;
+  const activeCount = liveSubscriptions.filter(s => s.status === 'actief').length;
   const filterSelectClass = "px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors hover:border-slate-300";
 
   return (
@@ -651,7 +652,7 @@ function SubscriptionsPage() {
           options={departmentsList.map(d => ({
             value: d,
             label: d,
-            count: subscriptions.filter(s => s.department === d).length,
+            count: liveSubscriptions.filter(s => s.department === d).length,
           }))}
         />
         <MultiSelect
@@ -661,7 +662,7 @@ function SubscriptionsPage() {
           options={categories.map(c => ({
             value: c,
             label: c,
-            count: subscriptions.filter(s => s.category === c).length,
+            count: liveSubscriptions.filter(s => s.category === c).length,
           }))}
         />
         <MultiSelect
@@ -671,7 +672,7 @@ function SubscriptionsPage() {
           options={BILLING_MODELS.map(m => ({
             value: m.value,
             label: m.label,
-            count: subscriptions.filter(s => getBillingModel(s) === m.value).length,
+            count: liveSubscriptions.filter(s => getBillingModel(s) === m.value).length,
           }))}
         />
       </div>
@@ -792,13 +793,13 @@ function SubscriptionsPage() {
       )}
 
       {bulkDeleteOpen && (
-        <Modal onClose={() => !bulkDeleting && setBulkDeleteOpen(false)} size="md" ariaLabel="Bulkverwijdering bevestigen">
+        <Modal onClose={() => !bulkDeleting && setBulkDeleteOpen(false)} size="md" ariaLabel="Bulkarchivering bevestigen">
           <div className="p-6 space-y-4">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Abonnementen verwijderen?</h2>
+              <h2 className="text-lg font-bold text-slate-900">Abonnementen archiveren?</h2>
               <p className="text-sm text-slate-500 mt-1">
-                Je staat op het punt <strong className="text-slate-900 tabular-nums">{selected.size} abonnement{selected.size !== 1 ? 'en' : ''}</strong> te verwijderen.
-                Dit kan niet ongedaan gemaakt worden.
+                Je staat op het punt <strong className="text-slate-900 tabular-nums">{selected.size} abonnement{selected.size !== 1 ? 'en' : ''}</strong> naar het archief te verplaatsen.
+                Historische kosten blijven bewaard en je kunt ze later weer terugzetten.
               </p>
             </div>
             <div className="flex justify-end gap-3 pt-2">
@@ -812,9 +813,9 @@ function SubscriptionsPage() {
               <button
                 onClick={handleBulkDelete}
                 disabled={bulkDeleting}
-                className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-red-500 hover:bg-red-600 transition-colors disabled:opacity-50"
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 transition-colors disabled:opacity-50"
               >
-                {bulkDeleting ? 'Verwijderen…' : `Ja, verwijder ${selected.size}`}
+                {bulkDeleting ? 'Archiveren…' : `Ja, archiveer ${selected.size}`}
               </button>
             </div>
           </div>
