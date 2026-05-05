@@ -29,9 +29,8 @@ export function useNotifications() {
     const sevenDaysAgo = addDays(now, -7);
 
     const isExpiringSoon = (sub, from, to) => {
-      const d = sub.renewal_date || sub.end_date;
-      if (!d) return false;
-      const date = new Date(d);
+      if (!sub.renewal_date) return false;
+      const date = new Date(sub.renewal_date);
       return (!from || isAfter(date, from)) && isBefore(date, to);
     };
 
@@ -42,9 +41,8 @@ export function useNotifications() {
 
     const recentlyExpired = data.filter(sub => {
       if (sub.status !== 'verlopen') return false;
-      const d = sub.end_date || sub.renewal_date;
-      if (!d) return false;
-      const date = new Date(d);
+      if (!sub.renewal_date) return false;
+      const date = new Date(sub.renewal_date);
       return isAfter(date, sevenDaysAgo) && isBefore(date, now);
     }).map(sub => ({ ...sub, _type: 'verlopen' }));
 

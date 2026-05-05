@@ -243,8 +243,7 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
 
           <Section title="Datums">
             <DetailRow label="Startdatum" value={sub.start_date ? formatDate(sub.start_date) : null} mono />
-            <DetailRow label="Einddatum" value={sub.end_date ? formatDate(sub.end_date) : null} mono />
-            <DetailRow label="Verlengingsdatum" value={sub.renewal_date ? formatDate(sub.renewal_date) : null} mono />
+            <DetailRow label="Vervaldatum" value={sub.renewal_date ? formatDate(sub.renewal_date) : null} mono />
             <DetailRow label="Auto-verlenging" value={sub.auto_renew === true ? 'Ja' : sub.auto_renew === false ? 'Nee' : null} />
           </Section>
 

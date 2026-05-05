@@ -394,12 +394,11 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
     if (showSeats && formData.seats !== '' && (isNaN(parseInt(formData.seats)) || parseInt(formData.seats) < 1))
       errors.seats = 'Aantal gebruikers moet minimaal 1 zijn.';
     if (formData.start_date && isNaN(Date.parse(formData.start_date))) errors.start_date = 'Datum niet juist ingevoerd.';
-    if (formData.end_date && isNaN(Date.parse(formData.end_date))) errors.end_date = 'Datum niet juist ingevoerd.';
-    if (formData.end_date && formData.start_date && new Date(formData.end_date) < new Date(formData.start_date))
-      errors.end_date = 'Einddatum mag niet vóór de startdatum liggen.';
     if (formData.renewal_date && isNaN(Date.parse(formData.renewal_date))) errors.renewal_date = 'Datum niet juist ingevoerd.';
-    if (formData.status === 'actief' && formData.end_date && new Date(formData.end_date) < new Date())
-      errors.status = 'Status kan niet actief zijn als de einddatum al verlopen is.';
+    if (formData.renewal_date && formData.start_date && new Date(formData.renewal_date) < new Date(formData.start_date))
+      errors.renewal_date = 'Vervaldatum mag niet vóór de startdatum liggen.';
+    if (formData.status === 'actief' && !formData.auto_renew && formData.renewal_date && new Date(formData.renewal_date) < new Date())
+      errors.status = 'Status kan niet actief zijn als de vervaldatum al verlopen is en auto-verlenging uit staat.';
     return errors;
   };
 
@@ -478,7 +477,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
       cost_per_seat: showSeats,
       is_variable_cost: isVariable,
       start_date: formData.start_date || null,
-      end_date: formData.end_date || null,
+      end_date: null,
       renewal_date: formData.renewal_date || null,
       created_by: user?.id
     };
@@ -760,20 +759,29 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
             <Field label="Startdatum" value={formData.start_date} error={fieldErrors.start_date} hint={!fieldErrors.start_date ? 'Mag leeg gelaten worden.' : undefined}>
               <input type="date" name="start_date" value={formData.start_date} onChange={handleChange} className={fieldErrors.start_date ? inputClassError : inputClass} />
             </Field>
-            <Field label="Einddatum" value={formData.end_date} error={fieldErrors.end_date} hint={!fieldErrors.end_date ? 'Laat leeg als er geen vaste einddatum is.' : undefined}>
-              <input type="date" name="end_date" value={formData.end_date} onChange={handleChange} className={fieldErrors.end_date ? inputClassError : inputClass} />
-            </Field>
-            <Field label="Verlengingsdatum" value={formData.renewal_date} error={fieldErrors.renewal_date} hint={!fieldErrors.renewal_date ? 'Wordt gebruikt voor verloopmeldingen.' : undefined}>
+            <Field
+              label="Vervaldatum"
+              value={formData.renewal_date}
+              error={fieldErrors.renewal_date}
+              hint={!fieldErrors.renewal_date
+                ? (formData.auto_renew
+                    ? 'Schuift automatisch door naar volgende periode op deze datum.'
+                    : 'Op deze datum stopt het abonnement (tenzij verlengd).')
+                : undefined}
+            >
               <input type="date" name="renewal_date" value={formData.renewal_date} onChange={handleChange} className={fieldErrors.renewal_date ? inputClassError : inputClass} />
             </Field>
-            <div className="flex items-end pb-1">
-              <ToggleSwitch
-                label="Auto-verlenging"
-                checked={formData.auto_renew}
-                onChange={(v) => setFormData(prev => ({ ...prev, auto_renew: v }))}
-              />
-            </div>
           </FieldGrid>
+          <div className="rounded-lg bg-slate-50 border border-slate-100 px-4 py-3">
+            <ToggleSwitch
+              label="Auto-verlenging"
+              hint={formData.auto_renew
+                ? 'Vervaldatum schuift automatisch door bij elke periode. Het abonnement blijft actief.'
+                : 'Abonnement stopt op de vervaldatum. Schakel uit voor abonnementen die je opzegt.'}
+              checked={formData.auto_renew}
+              onChange={(v) => setFormData(prev => ({ ...prev, auto_renew: v }))}
+            />
+          </div>
         </Section>
 
         <hr className="border-slate-100" />

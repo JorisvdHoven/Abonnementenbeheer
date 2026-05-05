@@ -106,9 +106,9 @@ function Navbar({ user }) {
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-slate-800 truncate">{sub.name}</p>
                           {sub._type === 'verlopen' ? (
-                            <p className="text-xs text-red-500 mt-0.5 tabular-nums">Verlopen op {formatDate(sub.end_date || sub.renewal_date)}</p>
+                            <p className="text-xs text-red-500 mt-0.5 tabular-nums">Verlopen op {formatDate(sub.renewal_date)}</p>
                           ) : (
-                            <p className="text-xs text-slate-400 mt-0.5 tabular-nums">Verloopt op {formatDate(sub.renewal_date || sub.end_date)}</p>
+                            <p className="text-xs text-slate-400 mt-0.5 tabular-nums">Verloopt op {formatDate(sub.renewal_date)}</p>
                           )}
                         </div>
                         <button

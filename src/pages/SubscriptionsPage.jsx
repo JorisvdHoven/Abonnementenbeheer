@@ -37,8 +37,7 @@ const EXPORT_FIELDS = [
   { key: 'seats',        label: 'Gebruikers',         getValue: s => s.seats ?? '' },
   { key: 'cost_per_seat',label: 'Prijs per gebruiker',getValue: s => s.cost_per_seat ? 'Ja' : 'Nee' },
   { key: 'start_date',   label: 'Startdatum',         getValue: s => formatDate(s.start_date) },
-  { key: 'end_date',     label: 'Einddatum',          getValue: s => formatDate(s.end_date) },
-  { key: 'renewal_date', label: 'Verlengingsdatum',   getValue: s => formatDate(s.renewal_date) },
+  { key: 'renewal_date', label: 'Vervaldatum',        getValue: s => formatDate(s.renewal_date) },
   { key: 'auto_renew',   label: 'Auto-verlenging',    getValue: s => s.auto_renew ? 'Ja' : 'Nee' },
   { key: 'contact_name', label: 'Contactpersoon',     getValue: s => s.contact_name ?? '' },
   { key: 'contact_email',label: 'Contact e-mail',     getValue: s => s.contact_email ?? '' },
@@ -166,7 +165,7 @@ function DaysLeft({ date, urgent }) {
 }
 
 function SubRow({ sub, onView, showUrgency, isSelectable, isSelected, onToggleSelect }) {
-  const renewalDate = sub.renewal_date || sub.end_date;
+  const renewalDate = sub.renewal_date;
   const isUrgent = showUrgency && renewalDate;
   return (
     <tr
@@ -241,7 +240,7 @@ const COLUMNS = [
   { key: 'name',         label: 'Naam',            className: '' },
   { key: 'category',     label: 'Afdeling',        className: 'hidden md:table-cell' },
   { key: 'cost',         label: 'Kosten',          className: '' },
-  { key: 'renewal_date', label: 'Verlengingsdatum',className: 'hidden lg:table-cell' },
+  { key: 'renewal_date', label: 'Vervaldatum',     className: 'hidden lg:table-cell' },
   { key: 'status',       label: 'Status',          className: 'hidden sm:table-cell' },
 ];
 
@@ -257,7 +256,7 @@ function Section({ title, rows, onView, showUrgency, accent, isSelectable, selec
 
   const getSortVal = (sub, key) => {
     if (key === 'cost') return toMonthly(sub.cost || 0, sub.cost_period);
-    if (key === 'renewal_date') return sub.renewal_date || sub.end_date || null;
+    if (key === 'renewal_date') return sub.renewal_date || null;
     return sub[key] ?? null;
   };
 
@@ -452,9 +451,7 @@ function SubscriptionsPage() {
 
   const expiringSoon = filtered.filter(s => {
     if (s.status !== 'actief' || s.auto_renew) return false;
-    const renewalSoon = s.renewal_date && isBefore(new Date(s.renewal_date), soon);
-    const endSoon = s.end_date && isBefore(new Date(s.end_date), soon);
-    return renewalSoon || endSoon;
+    return s.renewal_date && isBefore(new Date(s.renewal_date), soon);
   });
   const expiringSoonIds = new Set(expiringSoon.map(s => s.id));
   const actief   = filtered.filter(s => s.status === 'actief' && !expiringSoonIds.has(s.id));

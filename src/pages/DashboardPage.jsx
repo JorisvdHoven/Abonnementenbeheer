@@ -362,7 +362,7 @@ function DashboardPage() {
 
   const isActiveInMonth = (sub, year, month) => {
     const monthStart = new Date(year, month, 1);
-    if (sub.end_date && new Date(sub.end_date) < monthStart) return false;
+    // Zonder auto-verlenging stopt het abonnement op de vervaldatum
     if (!sub.auto_renew && sub.renewal_date && new Date(sub.renewal_date) < monthStart) return false;
     return true;
   };
@@ -381,15 +381,9 @@ function DashboardPage() {
   const expiringSoonList = activeSubs
     .filter(s => {
       if (s.auto_renew) return false;
-      const renewalSoon = s.renewal_date && isBefore(new Date(s.renewal_date), sixtyDays);
-      const endSoon = s.end_date && isBefore(new Date(s.end_date), sixtyDays);
-      return renewalSoon || endSoon;
+      return s.renewal_date && isBefore(new Date(s.renewal_date), sixtyDays);
     })
-    .sort((a, b) => {
-      const dateA = new Date(a.renewal_date || a.end_date);
-      const dateB = new Date(b.renewal_date || b.end_date);
-      return dateA - dateB;
-    });
+    .sort((a, b) => new Date(a.renewal_date) - new Date(b.renewal_date));
 
   const vierMaandenGeleden = new Date();
   vierMaandenGeleden.setMonth(vierMaandenGeleden.getMonth() - 4);
@@ -790,7 +784,7 @@ function DashboardPage() {
           ) : (
             <div className="space-y-1 -mx-1">
               {expiringSoonList.slice(0, 6).map(sub => {
-                const expiryDate = sub.renewal_date || sub.end_date;
+                const expiryDate = sub.renewal_date;
                 const days = Math.ceil((new Date(expiryDate) - now) / (1000 * 60 * 60 * 24));
                 const urgent = days < 30;
                 return (
