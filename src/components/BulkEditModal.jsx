@@ -3,7 +3,6 @@ import Modal from './Modal';
 
 const FIELDS = [
   { key: 'department', label: 'Afdeling',  type: 'select' },
-  { key: 'type',       label: 'Type',      type: 'select' },
   { key: 'category',   label: 'Categorie', type: 'select' },
   { key: 'status',     label: 'Status',    type: 'fixed', options: ['actief', 'verlopen', 'opgezegd'] },
 ];
@@ -17,7 +16,6 @@ function BulkEditModal({ count, categoryOptions = [], typeOptions = [], departme
 
   const optionsFor = (key) => {
     if (key === 'department') return departmentOptions;
-    if (key === 'type') return typeOptions;
     if (key === 'category') return categoryOptions;
     return [];
   };

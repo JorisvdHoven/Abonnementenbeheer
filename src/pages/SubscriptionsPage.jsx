@@ -10,7 +10,7 @@ import Modal from '../components/Modal';
 import BulkEditModal from '../components/BulkEditModal';
 import { toast } from '../lib/toast';
 import { addDays, isBefore } from 'date-fns';
-import { toMonthly, toEurMonthly, countActiveAccountsNow } from '../lib/costUtils';
+import { toMonthly, toEurMonthly, countActiveAccountsNow, getBillingModel, BILLING_MODELS, BILLING_MODEL_LABELS } from '../lib/costUtils';
 import { formatDate, formatDateLong, currencySymbol } from '../lib/format';
 import {
   ChevronDownIcon,
@@ -27,8 +27,8 @@ const EXPORT_FIELDS = [
   { key: 'vendor',       label: 'Leverancier',        getValue: s => s.vendor ?? '' },
   { key: 'account_owner',label: 'Account van',        getValue: s => s.account_owner ?? '' },
   { key: 'category',     label: 'Categorie',          getValue: s => s.category ?? '' },
-  { key: 'type',         label: 'Type',               getValue: s => s.type ?? '' },
   { key: 'department',   label: 'Afdeling',           getValue: s => s.department ?? '' },
+  { key: 'billing_model',label: 'Kostenmodel',        getValue: s => BILLING_MODEL_LABELS[getBillingModel(s)] ?? '' },
   { key: 'status',       label: 'Status',             getValue: s => s.status ?? '' },
   { key: 'cost',         label: 'Kosten',             getValue: s => s.cost != null ? s.cost.toString().replace('.', ',') : '' },
   { key: 'currency',     label: 'Valuta',             getValue: s => s.currency ?? 'EUR' },
@@ -45,7 +45,7 @@ const EXPORT_FIELDS = [
   { key: 'notes',        label: 'Notities',           getValue: s => s.notes ?? '' },
 ];
 
-const DEFAULT_SELECTED = new Set(['name','vendor','account_owner','category','type','department','status','cost','currency','cost_period','renewal_date']);
+const DEFAULT_SELECTED = new Set(['name','vendor','account_owner','category','department','billing_model','status','cost','currency','cost_period','renewal_date']);
 
 function ExportModal({ count, onExport, onClose }) {
   const [selected, setSelected] = useState(new Set(DEFAULT_SELECTED));
@@ -360,7 +360,7 @@ function SubscriptionsPage() {
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 250);
   const [categoryFilter, setCategoryFilter] = useState('');
-  const [typeFilter, setTypeFilter] = useState('');
+  const [billingModelFilter, setBillingModelFilter] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSub, setEditingSub] = useState(null);
@@ -441,7 +441,7 @@ function SubscriptionsPage() {
       (sub.account_owner?.toLowerCase().includes(q));
     return matchSearch
       && (!categoryFilter || sub.category === categoryFilter)
-      && (!typeFilter || sub.type === typeFilter)
+      && (!billingModelFilter || getBillingModel(sub) === billingModelFilter)
       && (!departmentFilter || sub.department === departmentFilter);
   });
 
@@ -556,9 +556,12 @@ function SubscriptionsPage() {
           <option value="">Alle categorieën</option>
           {categories.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={filterSelectClass}>
-          <option value="">Alle types</option>
-          {typesList.map(t => <option key={t} value={t}>{t}</option>)}
+        <select value={billingModelFilter} onChange={(e) => setBillingModelFilter(e.target.value)} className={filterSelectClass}>
+          <option value="">Alle kostenmodellen</option>
+          {BILLING_MODELS.map(m => {
+            const count = subscriptions.filter(s => getBillingModel(s) === m.value).length;
+            return <option key={m.value} value={m.value}>{m.label} ({count})</option>;
+          })}
         </select>
         <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)} className={filterSelectClass}>
           <option value="">Alle afdelingen</option>

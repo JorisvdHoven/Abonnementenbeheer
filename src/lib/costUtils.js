@@ -5,6 +5,28 @@ export const BILLING_PERIODS = [
   { value: 'Eenmalig',       label: 'Eenmalig',       factor: 0 },
 ];
 
+// Pricing model — afgeleid uit de bestaande velden. Eén bron van waarheid.
+export const BILLING_MODELS = [
+  { value: 'flat',                label: 'Vast bedrag' },
+  { value: 'per_seat',            label: 'Per gebruiker' },
+  { value: 'per_account',         label: 'Per persoonlijk account' },
+  { value: 'license_plus_seats',  label: 'Vaste licentie + per gebruiker' },
+  { value: 'variable',            label: 'Op basis van verbruik' },
+];
+
+export const BILLING_MODEL_LABELS = Object.fromEntries(
+  BILLING_MODELS.map(m => [m.value, m.label])
+);
+
+export function getBillingModel(sub) {
+  if (!sub) return 'flat';
+  if (sub.is_variable_cost) return 'variable';
+  if (sub.accounts && sub.accounts.length > 0) return 'per_account';
+  if (sub.base_cost && parseFloat(sub.base_cost) > 0) return 'license_plus_seats';
+  if (sub.cost_per_seat) return 'per_seat';
+  return 'flat';
+}
+
 export function toMonthly(cost, period) {
   if (!cost || !period) return cost || 0;
   const match = BILLING_PERIODS.find(p => p.value === period);

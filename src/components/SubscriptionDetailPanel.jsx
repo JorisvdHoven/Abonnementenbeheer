@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { XMarkIcon, PencilSquareIcon, TrashIcon, DocumentArrowDownIcon } from '@heroicons/react/24/outline';
 import { SubLogo } from './SubLogo';
-import { toMonthly, countActiveAccountsNow } from '../lib/costUtils';
+import { toMonthly, countActiveAccountsNow, getBillingModel, BILLING_MODEL_LABELS } from '../lib/costUtils';
 import { formatDate, formatDateLong, currencySymbol } from '../lib/format';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useLatestAuditFor } from '../hooks/useAuditLog';
@@ -221,7 +221,7 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
           <Section title="Abonnement">
             {!hasAccounts && <DetailRow label="Account van" value={sub.account_owner} />}
             <DetailRow label="Categorie" value={sub.category} />
-            <DetailRow label="Type" value={sub.type} />
+            <DetailRow label="Kostenmodel" value={BILLING_MODEL_LABELS[getBillingModel(sub)]} />
             <DetailRow label="Afdeling" value={sub.department} />
             {!hasAccounts && <DetailRow label="Gebruikers" value={sub.seats} mono />}
           </Section>

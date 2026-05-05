@@ -174,10 +174,10 @@ function TaxonomyList({ title, info, items, onAdd, onDelete, isAdmin, placeholde
 
 function SettingsPage() {
   const {
-    categories, types, departments, loading,
+    categories, departments, loading,
     exchangeRates, updateExchangeRate,
-    addCategory, addType, addDepartment,
-    deleteCategory, deleteType, deleteDepartment,
+    addCategory, addDepartment,
+    deleteCategory, deleteDepartment,
   } = useSettings();
   const { isAdmin } = useCurrentUser();
   const navigate = useNavigate();
@@ -191,7 +191,7 @@ function SettingsPage() {
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Instellingen</h1>
         <p className="text-sm text-slate-500 mt-1">
-          Beheer wisselkoersen, afdelingen, types en categorieën.
+          Beheer wisselkoersen, afdelingen en categorieën.
         </p>
       </div>
 
@@ -224,7 +224,7 @@ function SettingsPage() {
       </section>
 
       {/* Taxonomie grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <TaxonomyList
           title="Afdelingen"
           info={
@@ -243,27 +243,12 @@ function SettingsPage() {
           emptyText="Nog geen afdelingen toegevoegd."
         />
         <TaxonomyList
-          title="Types"
-          info={
-            <>
-              <p className="font-semibold mb-1">Type</p>
-              <p className="mb-2 text-slate-300">Hoe een abonnement wordt afgerekend.</p>
-              <p className="text-slate-300">Voorbeelden: <em>Licentie, Abonnement, Pay-per-use, Eenmalig</em>.</p>
-            </>
-          }
-          items={types}
-          onAdd={addType}
-          onDelete={deleteType}
-          isAdmin={isAdmin}
-          placeholder="Nieuw type…"
-          emptyText="Nog geen types toegevoegd."
-        />
-        <TaxonomyList
           title="Categorieën"
           info={
             <>
               <p className="font-semibold mb-1">Categorie</p>
               <p className="mb-2 text-slate-300">Categoriseert abonnementen op gebruiksdomein.</p>
+              <p className="mb-2 text-slate-300">Voorbeelden: <em>AI chatbot, Recruitment, CRM, Boekhouding</em>.</p>
               <p className="text-slate-300">Optioneel — leeg laten bij toevoegen geeft automatisch <em>Overig</em>.</p>
             </>
           }

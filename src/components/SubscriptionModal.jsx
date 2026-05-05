@@ -386,7 +386,6 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
   const validate = () => {
     const errors = {};
     if (!formData.name.trim()) errors.name = 'Naam is verplicht.';
-    if (!formData.type) errors.type = 'Type is verplicht.';
     if (!formData.department) errors.department = 'Afdeling is verplicht.';
     if (formData.contact_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.contact_email))
       errors.contact_email = 'Voer een geldig e-mailadres in.';
@@ -739,15 +738,6 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
               onChange={(v) => setFormData(prev => ({ ...prev, department: v }))}
               onAdd={onAddDepartment}
               error={fieldErrors.department}
-              required
-            />
-            <AddableSelect
-              label="Type"
-              value={formData.type}
-              options={typeOptions}
-              onChange={(v) => setFormData(prev => ({ ...prev, type: v }))}
-              onAdd={onAddType}
-              error={fieldErrors.type}
               required
             />
             <AddableSelect
