@@ -276,8 +276,18 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
   });
 
   const [accounts, setAccounts] = useState([]);
-  const [multiAccount, setMultiAccount] = useState(false);
+  const [billingModel, setBillingModel] = useState('flat');
   const initialAccountsRef = useRef([]);
+
+  // Afgeleide booleans voor leesbaarheid in JSX
+  const isFlat       = billingModel === 'flat';
+  const isPerSeat    = billingModel === 'per_seat';
+  const isPerAccount = billingModel === 'per_account';
+  const isLicSeats   = billingModel === 'license_plus_seats';
+  const isVariable   = billingModel === 'variable';
+  const showSeats    = isPerSeat || isLicSeats;
+  const showBase     = isLicSeats;
+  const showAccounts = isPerAccount;
 
   useEffect(() => {
     if (subscription) {
@@ -311,8 +321,16 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
       });
 
       const subAccounts = subscription.accounts || [];
+
+      // Derive billing model from existing data
+      let model = 'flat';
+      if (subscription.is_variable_cost) model = 'variable';
+      else if (subAccounts.length > 0) model = 'per_account';
+      else if (subscription.base_cost && parseFloat(subscription.base_cost) > 0) model = 'license_plus_seats';
+      else if (subscription.cost_per_seat) model = 'per_seat';
+      setBillingModel(model);
+
       if (subAccounts.length > 0) {
-        setMultiAccount(true);
         const formatted = subAccounts.map(a => ({
           id: a.id,
           owner_name: a.owner_name || '',
@@ -374,7 +392,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
       errors.contact_email = 'Voer een geldig e-mailadres in.';
     if (formData.cost !== '' && (isNaN(parseFloat(formData.cost)) || parseFloat(formData.cost) < 0))
       errors.cost = 'Voer een geldig bedrag in (bijv. 9.99).';
-    if (!multiAccount && formData.seats !== '' && (isNaN(parseInt(formData.seats)) || parseInt(formData.seats) < 1))
+    if (showSeats && formData.seats !== '' && (isNaN(parseInt(formData.seats)) || parseInt(formData.seats) < 1))
       errors.seats = 'Aantal seats moet minimaal 1 zijn.';
     if (formData.start_date && isNaN(Date.parse(formData.start_date))) errors.start_date = 'Datum niet juist ingevoerd.';
     if (formData.end_date && isNaN(Date.parse(formData.end_date))) errors.end_date = 'Datum niet juist ingevoerd.';
@@ -446,15 +464,20 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
     const { data: { user } } = await supabase.auth.getUser();
 
     // Bij multi-account modus: account_owner en seats spelen geen rol meer
+    // Apply billing model rules — alleen relevante velden bewaren per model
+    const baseCostParsed = formData.base_cost === '' || formData.base_cost === null
+      ? null
+      : (parseFloat(formData.base_cost) || 0);
+
     const dataToSave = {
       ...formData,
-      account_owner: multiAccount ? null : (formData.account_owner || null),
+      account_owner: isPerAccount ? null : (formData.account_owner || null),
       category: formData.category || 'Overig',
       cost: parseFloat(formData.cost) || 0,
-      base_cost: formData.base_cost === '' || formData.base_cost === null ? null : (parseFloat(formData.base_cost) || 0),
-      seats: multiAccount ? 1 : (parseInt(formData.seats) || 1),
-      cost_per_seat: multiAccount ? false : formData.cost_per_seat,
-      is_variable_cost: !!formData.is_variable_cost,
+      base_cost: showBase ? baseCostParsed : null,
+      seats: showSeats ? (parseInt(formData.seats) || 1) : 1,
+      cost_per_seat: showSeats,
+      is_variable_cost: isVariable,
       start_date: formData.start_date || null,
       end_date: formData.end_date || null,
       renewal_date: formData.renewal_date || null,
@@ -467,11 +490,11 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
     const savedSub = result?.data ?? subscription;
     if (savedSub?.id) {
       let accountsChanged = false;
-      if (multiAccount) {
+      if (isPerAccount) {
         await persistAccounts(savedSub.id);
         accountsChanged = true;
       } else if (initialAccountsRef.current.length > 0) {
-        // Toggle uitgezet → alle accounts verwijderen
+        // Model gewijzigd weg van per-account → alle accounts verwijderen
         await supabase.from('subscription_accounts').delete().eq('subscription_id', savedSub.id);
         accountsChanged = true;
       }
@@ -485,9 +508,11 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
   };
 
   const monthlyPreview = (() => {
-    const baseFee = parseFloat(formData.base_cost) || 0;
+    const cost = parseFloat(formData.cost) || 0;
+    const baseFee = showBase ? (parseFloat(formData.base_cost) || 0) : 0;
     let variablePerPeriod = 0;
-    if (multiAccount) {
+
+    if (isPerAccount) {
       const today = new Date();
       const activeAccounts = accounts.filter(a => {
         const start = a.start_date ? new Date(a.start_date) : null;
@@ -499,13 +524,17 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
       variablePerPeriod = activeAccounts.reduce((sum, a) => {
         const c = a.cost !== '' && a.cost !== null && a.cost !== undefined
           ? parseFloat(a.cost) || 0
-          : parseFloat(formData.cost) || 0;
+          : cost;
         return sum + c;
       }, 0);
-    } else {
+    } else if (showSeats) {
       const seats = parseInt(formData.seats) || 1;
-      variablePerPeriod = (parseFloat(formData.cost) || 0) * (formData.cost_per_seat ? seats : 1);
+      variablePerPeriod = cost * seats;
+    } else {
+      // flat / variable: cost is het hele bedrag
+      variablePerPeriod = cost;
     }
+
     const total = baseFee + variablePerPeriod;
     if (total === 0) return null;
     return toMonthly(total, formData.cost_period);
@@ -562,8 +591,43 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
 
         {/* Kosten & facturatie */}
         <Section label="Kosten & facturatie">
+
+          {/* Kernvraag: hoe wordt dit afgerekend */}
+          <Field label="Hoe wordt dit afgerekend?" value={billingModel}>
+            <select
+              value={billingModel}
+              onChange={(e) => setBillingModel(e.target.value)}
+              className={inputClass}
+            >
+              <option value="flat">Vast bedrag</option>
+              <option value="per_seat">Per gebruiker (seats)</option>
+              <option value="per_account">Per persoonlijk account</option>
+              <option value="license_plus_seats">Vaste licentie + per gebruiker</option>
+              <option value="variable">Op basis van verbruik</option>
+            </select>
+            <p className="mt-1.5 text-xs text-slate-500 leading-relaxed">
+              {isFlat        && <>Eén vast bedrag per facturatieperiode. Bv. Slack workspace, Netflix.</>}
+              {isPerSeat     && <>Iedere gebruiker betaalt hetzelfde tarief × aantal seats. Bv. Microsoft 365, Slack Pro.</>}
+              {isPerAccount  && <>Iedere medewerker heeft een eigen account met eigen start-/einddatum en eventueel eigen prijs. Bv. LinkedIn Pro, Adobe individueel.</>}
+              {isLicSeats    && <>Vaste licentie naast variabele kosten per gebruiker. Bv. Carerix (€300 licentie + €10/gebruiker).</>}
+              {isVariable    && <>Bedrag varieert per maand op basis van gebruik. Vul een schatting in — wordt overal getoond met ±. Bv. AWS, Stripe fees, OpenAI API.</>}
+            </p>
+          </Field>
+
+          {/* Kosten input — label & beschikbaarheid wisselt per model */}
           <FieldGrid>
-            <Field label={multiAccount ? 'Standaardprijs per account' : 'Kosten'} value={formData.cost} error={fieldErrors.cost} hint={multiAccount ? 'Wordt gebruikt als geen eigen prijs is ingevuld bij een account.' : undefined}>
+            <Field
+              label={
+                isPerSeat        ? 'Prijs per seat' :
+                isPerAccount     ? 'Standaardprijs per account' :
+                isLicSeats       ? 'Prijs per seat' :
+                isVariable       ? 'Geschatte kosten' :
+                                   'Bedrag'
+              }
+              value={formData.cost}
+              error={fieldErrors.cost}
+              hint={isPerAccount ? 'Default — kan per account overschreven worden.' : undefined}
+            >
               <div className="flex">
                 <select name="currency" value={formData.currency} onChange={handleChange} className="px-2 py-2 border border-slate-200 border-r-0 rounded-l-md bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
                   <option value="EUR">€ EUR</option>
@@ -589,61 +653,44 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
             </Field>
           </FieldGrid>
 
-          <Field
-            label="Vaste licentiekosten"
-            value={formData.base_cost}
-            hint="Optioneel — voor abonnementen met een vaste licentie naast per-gebruiker / per-account kosten (bv. Carerix)."
-          >
-            <div className="flex max-w-xs">
-              <span className="px-3 py-2 border border-slate-200 border-r-0 rounded-l-md bg-slate-50 text-sm text-slate-500">{sym}</span>
+          {/* Conditional: vaste licentiekosten (alleen license_plus_seats) */}
+          {showBase && (
+            <Field
+              label="Vaste licentiekosten"
+              value={formData.base_cost}
+              hint="Wordt opgeteld bij de per-gebruiker kosten."
+            >
+              <div className="flex max-w-xs">
+                <span className="px-3 py-2 border border-slate-200 border-r-0 rounded-l-md bg-slate-50 text-sm text-slate-500">{sym}</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  name="base_cost"
+                  value={formData.base_cost}
+                  onChange={handleChange}
+                  placeholder="0,00"
+                  className="block w-full px-3 py-2 rounded-r-md border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                />
+              </div>
+            </Field>
+          )}
+
+          {/* Conditional: aantal seats */}
+          {showSeats && (
+            <Field label="Aantal seats" value={formData.seats} error={fieldErrors.seats}>
               <input
                 type="number"
-                step="0.01"
-                name="base_cost"
-                value={formData.base_cost}
+                name="seats"
+                min="1"
+                value={formData.seats}
                 onChange={handleChange}
-                placeholder="0,00"
-                className="block w-full px-3 py-2 rounded-r-md border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                className={`max-w-[120px] ${fieldErrors.seats ? inputClassError : inputClass}`}
               />
-            </div>
-          </Field>
+            </Field>
+          )}
 
-          {monthlyPreview !== null && (() => {
-            const baseFee = parseFloat(formData.base_cost) || 0;
-            const baseFeeMonthly = toMonthly(baseFee, formData.cost_period);
-            const variableMonthly = monthlyPreview - baseFeeMonthly;
-            const showBreakdown = baseFee > 0 && variableMonthly > 0;
-            return (
-              <div className="text-xs text-slate-500 -mt-1 tabular-nums">
-                ≈ {formData.is_variable_cost ? '± ' : ''}{sym}{monthlyPreview.toFixed(2)} per maand totaal
-                {showBreakdown && (
-                  <span className="text-slate-400">
-                    {' '}({sym}{baseFeeMonthly.toFixed(2)} licentie + {sym}{variableMonthly.toFixed(2)} variabel)
-                  </span>
-                )}
-              </div>
-            );
-          })()}
-
-          <div className="rounded-lg bg-slate-50 border border-slate-100 px-4 py-3">
-            <ToggleSwitch
-              label="Variabele kosten (verbruik)"
-              hint="Voor abonnementen waar het bedrag per maand kan verschillen op basis van gebruik. Wordt getoond als schatting (± €X)."
-              checked={formData.is_variable_cost}
-              onChange={(v) => setFormData(prev => ({ ...prev, is_variable_cost: v }))}
-            />
-          </div>
-
-          <div className="rounded-lg bg-slate-50 border border-slate-100 px-4 py-3">
-            <ToggleSwitch
-              label="Heeft meerdere accounts"
-              hint="Voor abonnementen waar elke medewerker een eigen account heeft (bv. LinkedIn Pro, Adobe). Elk account heeft een eigen start- en einddatum."
-              checked={multiAccount}
-              onChange={setMultiAccount}
-            />
-          </div>
-
-          {multiAccount ? (
+          {/* Conditional: accounts manager */}
+          {showAccounts && (
             <AccountsManager
               accounts={accounts}
               onChange={setAccounts}
@@ -651,21 +698,31 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
               currency={formData.currency}
               period={formData.cost_period}
             />
-          ) : (
-            <FieldGrid>
-              <Field label="Aantal seats" value={formData.seats} error={fieldErrors.seats}>
-                <input type="number" name="seats" value={formData.seats} onChange={handleChange} className={fieldErrors.seats ? inputClassError : inputClass} />
-              </Field>
-              <div className="flex items-end pb-1">
-                <ToggleSwitch
-                  label="Prijs per seat"
-                  hint="Vermenigvuldig kosten met aantal seats."
-                  checked={formData.cost_per_seat}
-                  onChange={(v) => setFormData(prev => ({ ...prev, cost_per_seat: v }))}
-                />
-              </div>
-            </FieldGrid>
           )}
+
+          {/* Live preview onderaan */}
+          {monthlyPreview !== null && (() => {
+            const baseFee = showBase ? (parseFloat(formData.base_cost) || 0) : 0;
+            const baseFeeMonthly = toMonthly(baseFee, formData.cost_period);
+            const variableMonthly = monthlyPreview - baseFeeMonthly;
+            const showBreakdown = baseFee > 0 && variableMonthly > 0;
+            return (
+              <div className="rounded-lg bg-slate-50 border border-slate-100 px-4 py-3 flex items-baseline justify-between flex-wrap gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Maandtotaal</span>
+                <div className="text-sm tabular-nums">
+                  <span className="font-semibold text-slate-900">
+                    {isVariable ? '± ' : '≈ '}{sym}{monthlyPreview.toFixed(2)}
+                  </span>
+                  <span className="text-slate-400 ml-1">/mnd</span>
+                  {showBreakdown && (
+                    <span className="ml-3 text-slate-400">
+                      ({sym}{baseFeeMonthly.toFixed(2)} licentie + {sym}{variableMonthly.toFixed(2)} variabel)
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
         </Section>
 
         <hr className="border-slate-100" />
@@ -732,7 +789,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
         {/* Contact (collapsible) */}
         <CollapsibleSection label="Contact" hint="Contactpersoon bij de leverancier — optioneel">
           <FieldGrid>
-            {!multiAccount && (
+            {!isPerAccount && (
               <Field label="Account van" value={formData.account_owner} hint="De interne medewerker bij wie dit account hoort.">
                 <input type="text" name="account_owner" value={formData.account_owner} onChange={handleChange} placeholder="Bijv. Joris van den Hoven" className={inputClass} />
               </Field>
