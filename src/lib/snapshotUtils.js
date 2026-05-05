@@ -45,17 +45,20 @@ export async function backfillSubscriptionSnapshots(supabase, sub) {
 
   const factor = BILLING_FACTORS[sub.cost_period] ?? 1;
   const parentCost = parseFloat(sub.cost) || 0;
+  const baseCost = parseFloat(sub.base_cost) || 0;
 
   const computeMonthly = (year, month) => {
+    let variable;
     if (hasAccounts) {
       const firstDay = new Date(year, month, 1);
       const lastDay = new Date(year, month + 1, 0);
       const active = accounts.filter(a => isAccountActiveInRange(a, firstDay, lastDay));
-      const totalPerPeriod = active.reduce((sum, a) => sum + effectiveAccountCost(a, parentCost), 0);
-      return totalPerPeriod * factor;
+      variable = active.reduce((sum, a) => sum + effectiveAccountCost(a, parentCost), 0);
+    } else {
+      const seatMul = sub.cost_per_seat ? (sub.seats || 1) : 1;
+      variable = parentCost * seatMul;
     }
-    const seatMul = sub.cost_per_seat ? (sub.seats || 1) : 1;
-    return parentCost * factor * seatMul;
+    return (baseCost + variable) * factor;
   };
 
   const startYear = startDate.getFullYear();
@@ -76,8 +79,10 @@ export async function backfillSubscriptionSnapshots(supabase, sub) {
         vendor: sub.vendor,
         department: sub.department || null,
         cost: sub.cost,
+        base_cost: sub.base_cost ?? null,
         currency: sub.currency || 'EUR',
         cost_period: sub.cost_period,
+        is_variable_cost: sub.is_variable_cost ?? false,
         monthly_equivalent: monthlyEquivalent,
       };
 

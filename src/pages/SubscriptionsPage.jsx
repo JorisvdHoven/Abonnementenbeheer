@@ -139,11 +139,15 @@ function CostDisplay({ sub }) {
   const monthly = toEurMonthly(sub, {});
   if (!monthly) return <span className="text-slate-300">—</span>;
 
+  const isVariable = sub.is_variable_cost;
+  const titleParts = [];
+  if (hasAccounts) titleParts.push(`${countActiveAccountsNow(sub.accounts)} actieve accounts`);
+  if (sub.base_cost) titleParts.push(`incl. ${sym}${sub.base_cost} vaste licentie`);
+  if (isVariable) titleParts.push('Verbruikskosten — bedrag varieert per maand');
+
   return (
-    <span
-      className="tabular-nums"
-      title={hasAccounts ? `${countActiveAccountsNow(sub.accounts)} actieve accounts` : `${sym}${sub.cost} ${sub.cost_period}`}
-    >
+    <span className="tabular-nums" title={titleParts.join(' · ')}>
+      {isVariable && <span className="text-slate-400 mr-0.5">±</span>}
       {sym}{fmt(monthly)}<span className="text-xs text-slate-400 ml-0.5 font-normal">/mnd</span>
     </span>
   );

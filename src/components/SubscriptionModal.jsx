@@ -266,8 +266,9 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
     name: '', vendor: '', account_owner: '',
     contact_name: '', contact_email: '', contact_phone: '',
     category: '', type: '', department: '',
-    cost: '', currency: 'EUR', cost_period: '',
+    cost: '', base_cost: '', currency: 'EUR', cost_period: '',
     seats: 1, cost_per_seat: false,
+    is_variable_cost: false,
     start_date: '', end_date: '', renewal_date: '',
     status: 'actief', auto_renew: false,
     terms: '', notes: '',
@@ -291,10 +292,12 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
         type: subscription.type || '',
         department: subscription.department || '',
         cost: subscription.cost ?? '',
+        base_cost: subscription.base_cost ?? '',
         currency: subscription.currency || 'EUR',
         cost_period: subscription.cost_period || '',
         seats: subscription.seats || 1,
         cost_per_seat: subscription.cost_per_seat || false,
+        is_variable_cost: subscription.is_variable_cost || false,
         start_date: subscription.start_date ? subscription.start_date.split('T')[0] : '',
         end_date: subscription.end_date ? subscription.end_date.split('T')[0] : '',
         renewal_date: subscription.renewal_date ? subscription.renewal_date.split('T')[0] : '',
@@ -448,8 +451,10 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
       account_owner: multiAccount ? null : (formData.account_owner || null),
       category: formData.category || 'Overig',
       cost: parseFloat(formData.cost) || 0,
+      base_cost: formData.base_cost === '' || formData.base_cost === null ? null : (parseFloat(formData.base_cost) || 0),
       seats: multiAccount ? 1 : (parseInt(formData.seats) || 1),
       cost_per_seat: multiAccount ? false : formData.cost_per_seat,
+      is_variable_cost: !!formData.is_variable_cost,
       start_date: formData.start_date || null,
       end_date: formData.end_date || null,
       renewal_date: formData.renewal_date || null,
@@ -480,6 +485,8 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
   };
 
   const monthlyPreview = (() => {
+    const baseFee = parseFloat(formData.base_cost) || 0;
+    let variablePerPeriod = 0;
     if (multiAccount) {
       const today = new Date();
       const activeAccounts = accounts.filter(a => {
@@ -489,19 +496,19 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
         if (end && end < today) return false;
         return true;
       });
-      if (activeAccounts.length === 0) return null;
-      const totalCost = activeAccounts.reduce((sum, a) => {
+      variablePerPeriod = activeAccounts.reduce((sum, a) => {
         const c = a.cost !== '' && a.cost !== null && a.cost !== undefined
           ? parseFloat(a.cost) || 0
           : parseFloat(formData.cost) || 0;
         return sum + c;
       }, 0);
-      return toMonthly(totalCost, formData.cost_period);
+    } else {
+      const seats = parseInt(formData.seats) || 1;
+      variablePerPeriod = (parseFloat(formData.cost) || 0) * (formData.cost_per_seat ? seats : 1);
     }
-    const baseMonthly = toMonthly(parseFloat(formData.cost) || 0, formData.cost_period);
-    if (!baseMonthly) return null;
-    const seats = parseInt(formData.seats) || 1;
-    return baseMonthly * (formData.cost_per_seat ? seats : 1);
+    const total = baseFee + variablePerPeriod;
+    if (total === 0) return null;
+    return toMonthly(total, formData.cost_period);
   })();
 
   const sym = currencySymbol(formData.currency);
@@ -582,11 +589,50 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
             </Field>
           </FieldGrid>
 
-          {monthlyPreview !== null && (
-            <div className="text-xs text-slate-500 -mt-1">
-              ≈ {sym}{monthlyPreview.toFixed(2)} per maand totaal
+          <Field
+            label="Vaste licentiekosten"
+            value={formData.base_cost}
+            hint="Optioneel — voor abonnementen met een vaste licentie naast per-gebruiker / per-account kosten (bv. Carerix)."
+          >
+            <div className="flex max-w-xs">
+              <span className="px-3 py-2 border border-slate-200 border-r-0 rounded-l-md bg-slate-50 text-sm text-slate-500">{sym}</span>
+              <input
+                type="number"
+                step="0.01"
+                name="base_cost"
+                value={formData.base_cost}
+                onChange={handleChange}
+                placeholder="0,00"
+                className="block w-full px-3 py-2 rounded-r-md border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+              />
             </div>
-          )}
+          </Field>
+
+          {monthlyPreview !== null && (() => {
+            const baseFee = parseFloat(formData.base_cost) || 0;
+            const baseFeeMonthly = toMonthly(baseFee, formData.cost_period);
+            const variableMonthly = monthlyPreview - baseFeeMonthly;
+            const showBreakdown = baseFee > 0 && variableMonthly > 0;
+            return (
+              <div className="text-xs text-slate-500 -mt-1 tabular-nums">
+                ≈ {formData.is_variable_cost ? '± ' : ''}{sym}{monthlyPreview.toFixed(2)} per maand totaal
+                {showBreakdown && (
+                  <span className="text-slate-400">
+                    {' '}({sym}{baseFeeMonthly.toFixed(2)} licentie + {sym}{variableMonthly.toFixed(2)} variabel)
+                  </span>
+                )}
+              </div>
+            );
+          })()}
+
+          <div className="rounded-lg bg-slate-50 border border-slate-100 px-4 py-3">
+            <ToggleSwitch
+              label="Variabele kosten (verbruik)"
+              hint="Voor abonnementen waar het bedrag per maand kan verschillen op basis van gebruik. Wordt getoond als schatting (± €X)."
+              checked={formData.is_variable_cost}
+              onChange={(v) => setFormData(prev => ({ ...prev, is_variable_cost: v }))}
+            />
+          </div>
 
           <div className="rounded-lg bg-slate-50 border border-slate-100 px-4 py-3">
             <ToggleSwitch

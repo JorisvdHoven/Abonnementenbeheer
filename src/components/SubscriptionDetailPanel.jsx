@@ -106,13 +106,14 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
 
   const hasAccounts = sub.accounts && sub.accounts.length > 0;
   const activeAccountCount = hasAccounts ? countActiveAccountsNow(sub.accounts) : 0;
+  const baseCost = parseFloat(sub.base_cost) || 0;
+  const isVariable = !!sub.is_variable_cost;
 
-  // Voor multi-account: som van actieve account-prijzen (met fallback op sub.cost)
-  // Voor legacy: cost × seats
-  let perPeriodTotal = parseFloat(sub.cost) || 0;
+  // Variabel deel per periode (per-account of per-seat)
+  let variablePerPeriod = parseFloat(sub.cost) || 0;
   if (hasAccounts) {
     const today = new Date();
-    perPeriodTotal = sub.accounts
+    variablePerPeriod = sub.accounts
       .filter(a => {
         const start = a.start_date ? new Date(a.start_date) : null;
         const end = a.end_date ? new Date(a.end_date) : null;
@@ -127,9 +128,10 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
         return sum + c;
       }, 0);
   } else if (sub.cost_per_seat) {
-    perPeriodTotal *= (sub.seats || 1);
+    variablePerPeriod *= (sub.seats || 1);
   }
 
+  const perPeriodTotal = baseCost + variablePerPeriod;
   const monthly = sub.cost_period && sub.cost_period !== 'Eenmalig'
     ? toMonthly(perPeriodTotal, sub.cost_period)
     : null;
@@ -177,19 +179,39 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
         {/* Hero KPI */}
         {monthly !== null && (
           <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-b from-slate-50/50 to-white">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Maandkosten</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              {isVariable ? 'Geschatte maandkosten' : 'Maandkosten'}
+            </p>
             <div className="flex items-baseline gap-2 mt-1">
               <p className="text-3xl font-bold text-slate-900 tabular-nums leading-none">
+                {isVariable && <span className="text-slate-400 mr-1">±</span>}
                 {sym}{fmtAmount(monthly)}
               </p>
               <span className="text-sm text-slate-400">/ mnd</span>
             </div>
             <p className="text-xs text-slate-500 mt-2 tabular-nums">
+              {isVariable && '± '}
               {sym}{fmtAmount(monthly * 12)} per jaar
               {sub.cost_period && sub.cost_period !== 'Maandelijks' && (
-                <> · {sym}{fmtAmount(perPeriodTotal)} per {sub.cost_period.toLowerCase()}</>
+                <> · {isVariable && '± '}{sym}{fmtAmount(perPeriodTotal)} per {sub.cost_period.toLowerCase()}</>
               )}
             </p>
+            {baseCost > 0 && (
+              <p className="text-xs text-slate-500 mt-1 tabular-nums">
+                <span className="text-slate-400">{sym}{fmtAmount(baseCost)} licentie</span>
+                <span className="mx-1.5 text-slate-300">+</span>
+                <span className="text-slate-400">{sym}{fmtAmount(variablePerPeriod)} variabel</span>
+                {sub.cost_period && sub.cost_period !== 'Maandelijks' && (
+                  <span className="text-slate-400"> per {sub.cost_period.toLowerCase()}</span>
+                )}
+              </p>
+            )}
+            {isVariable && (
+              <p className="text-xs text-orange-600 mt-1.5 inline-flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                Verbruikskosten — bedrag varieert per maand
+              </p>
+            )}
           </div>
         )}
 

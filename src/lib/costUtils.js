@@ -43,25 +43,32 @@ function effectiveAccountCost(account, parentCost) {
   return parentCost || 0;
 }
 
-// Maandkosten in euro, rekening houdend met seats/accounts en valuta-conversie.
+// Bereken het variabele deel (per-account of per-seat) per periode (zonder base_cost)
+function variablePerPeriod(sub, accountsForMonth) {
+  if (sub.accounts && sub.accounts.length > 0) {
+    return accountsForMonth.reduce((sum, a) => sum + effectiveAccountCost(a, sub.cost), 0);
+  }
+  const seatMultiplier = sub.cost_per_seat ? (sub.seats || 1) : 1;
+  return (parseFloat(sub.cost) || 0) * seatMultiplier;
+}
+
+// Maandkosten in euro, rekening houdend met base_cost, seats/accounts en valuta-conversie.
 // `rates` is een object zoals { USD: 0.93, GBP: 1.15, CHF: 1.05 } — 1 unit = X EUR.
-// Multi-account: somt per actieve account (eigen cost of parent.cost als fallback);
-// Legacy: cost × seats logica.
+// Totaal = base_cost + variabel deel, beide door cost_period factor en fx rate.
 export function toEurMonthly(sub, rates = {}) {
   const ratesObj = typeof rates === 'number' ? { USD: rates } : rates;
   const fxRate = sub.currency && sub.currency !== 'EUR'
     ? (ratesObj[sub.currency] ?? 1)
     : 1;
 
-  if (sub.accounts && sub.accounts.length > 0) {
-    const active = activeAccountsInMonth(sub.accounts, new Date().getFullYear(), new Date().getMonth());
-    const totalCost = active.reduce((sum, a) => sum + effectiveAccountCost(a, sub.cost), 0);
-    return toMonthly(totalCost, sub.cost_period) * fxRate;
-  }
+  const activeAccts = sub.accounts && sub.accounts.length > 0
+    ? activeAccountsInMonth(sub.accounts, new Date().getFullYear(), new Date().getMonth())
+    : [];
+  const variable = variablePerPeriod(sub, activeAccts);
+  const base = parseFloat(sub.base_cost) || 0;
+  const totalPerPeriod = base + variable;
 
-  const base = toMonthly(sub.cost || 0, sub.cost_period);
-  const seatMultiplier = sub.cost_per_seat ? (sub.seats || 1) : 1;
-  return base * seatMultiplier * fxRate;
+  return toMonthly(totalPerPeriod, sub.cost_period) * fxRate;
 }
 
 // Voor historische berekening (specifieke maand): gebruik account-status in die maand
@@ -71,13 +78,12 @@ export function toEurMonthlyFor(sub, year, month, rates = {}) {
     ? (ratesObj[sub.currency] ?? 1)
     : 1;
 
-  if (sub.accounts && sub.accounts.length > 0) {
-    const active = activeAccountsInMonth(sub.accounts, year, month);
-    const totalCost = active.reduce((sum, a) => sum + effectiveAccountCost(a, sub.cost), 0);
-    return toMonthly(totalCost, sub.cost_period) * fxRate;
-  }
+  const activeAccts = sub.accounts && sub.accounts.length > 0
+    ? activeAccountsInMonth(sub.accounts, year, month)
+    : [];
+  const variable = variablePerPeriod(sub, activeAccts);
+  const base = parseFloat(sub.base_cost) || 0;
+  const totalPerPeriod = base + variable;
 
-  const base = toMonthly(sub.cost || 0, sub.cost_period);
-  const seatMultiplier = sub.cost_per_seat ? (sub.seats || 1) : 1;
-  return base * seatMultiplier * fxRate;
+  return toMonthly(totalPerPeriod, sub.cost_period) * fxRate;
 }
