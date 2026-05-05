@@ -12,6 +12,15 @@ import { toast } from '../lib/toast';
 import { addDays, isBefore } from 'date-fns';
 import { toMonthly, toEurMonthly, countActiveAccountsNow } from '../lib/costUtils';
 import { formatDate, formatDateLong, currencySymbol } from '../lib/format';
+import {
+  ChevronDownIcon,
+  MagnifyingGlassIcon,
+  ArrowDownTrayIcon,
+  PlusIcon,
+  ChevronUpDownIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
+} from '@heroicons/react/24/outline';
 
 const EXPORT_FIELDS = [
   { key: 'name',         label: 'Naam',              getValue: s => s.name ?? '' },
@@ -54,13 +63,15 @@ function ExportModal({ count, onExport, onClose }) {
     <Modal onClose={onClose} size="md" ariaLabel="CSV exporteren">
       <div className="p-6 space-y-5">
         <div>
-          <h2 className="text-lg font-bold text-dark">CSV exporteren</h2>
-          <p className="text-sm text-slate-500 mt-0.5">Kies welke velden je wilt meenemen. {count} abonnement{count !== 1 ? 'en' : ''} wordt geëxporteerd.</p>
+          <h2 className="text-lg font-bold text-slate-900">CSV exporteren</h2>
+          <p className="text-sm text-slate-500 mt-1 tabular-nums">
+            {count} abonnement{count !== 1 ? 'en' : ''} worden geëxporteerd.
+          </p>
         </div>
 
         <div className="flex justify-between items-center">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Velden</span>
-          <button onClick={toggleAll} className="text-xs text-primary hover:underline">
+          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Velden</span>
+          <button onClick={toggleAll} className="text-xs font-medium text-primary hover:underline">
             {allSelected ? 'Deselecteer alles' : 'Selecteer alles'}
           </button>
         </div>
@@ -72,21 +83,27 @@ function ExportModal({ count, onExport, onClose }) {
                 type="checkbox"
                 checked={selected.has(field.key)}
                 onChange={() => toggle(field.key)}
-                className="rounded border-gray-300 text-primary focus:ring-primary"
+                className="rounded border-slate-300 text-primary focus:ring-primary/30"
               />
-              <span className="text-sm text-slate-600 group-hover:text-dark transition-colors">{field.label}</span>
+              <span className="text-sm text-slate-600 group-hover:text-slate-900 transition-colors">{field.label}</span>
             </label>
           ))}
         </div>
 
         <div className="flex justify-end gap-3 pt-1">
-          <button onClick={onClose} className="btn-secondary">Annuleren</button>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg text-sm font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-colors"
+          >
+            Annuleren
+          </button>
           <button
             onClick={() => onExport(selected)}
             disabled={selected.size === 0}
-            className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white bg-primary shadow-sm hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            ↓ Exporteren ({selected.size} velden)
+            <ArrowDownTrayIcon className="h-4 w-4" />
+            Exporteren ({selected.size})
           </button>
         </div>
       </div>
@@ -95,15 +112,16 @@ function ExportModal({ count, onExport, onClose }) {
 }
 
 function StatusBadge({ status }) {
-  const styles = {
-    actief:   'bg-green-50 text-green-700 ring-1 ring-green-200',
-    verlopen: 'bg-red-50 text-red-600 ring-1 ring-red-200',
-    opgezegd: 'bg-slate-100 text-slate-500 ring-1 ring-slate-200',
+  const config = {
+    actief:   { dot: 'bg-green-500', text: 'text-slate-700', label: 'Actief' },
+    verlopen: { dot: 'bg-red-500',   text: 'text-slate-700', label: 'Verlopen' },
+    opgezegd: { dot: 'bg-slate-400', text: 'text-slate-500', label: 'Opgezegd' },
   };
-  const labels = { actief: 'Actief', verlopen: 'Verlopen', opgezegd: 'Opgezegd' };
+  const c = config[status] ?? config.opgezegd;
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${styles[status] ?? styles.opgezegd}`}>
-      {labels[status] ?? status}
+    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${c.text}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
+      {c.label ?? status}
     </span>
   );
 }
@@ -111,19 +129,22 @@ function StatusBadge({ status }) {
 function CostDisplay({ sub }) {
   const hasAccounts = sub.accounts && sub.accounts.length > 0;
   const sym = currencySymbol(sub.currency);
+  const fmt = (v) => v.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   if (sub.cost_period === 'Eenmalig') {
-    if (!sub.cost) return <span className="text-slate-400">—</span>;
-    return <span>{sym}{sub.cost} <span className="text-xs text-slate-400">eenmalig</span></span>;
+    if (!sub.cost) return <span className="text-slate-300">—</span>;
+    return <span className="tabular-nums">{sym}{fmt(parseFloat(sub.cost))} <span className="text-xs text-slate-400">eenmalig</span></span>;
   }
 
-  // toEurMonthly geeft het maandtotaal in eigen valuta wanneer rates leeg is.
   const monthly = toEurMonthly(sub, {});
-  if (!monthly) return <span className="text-slate-400">—</span>;
+  if (!monthly) return <span className="text-slate-300">—</span>;
 
   return (
-    <span title={hasAccounts ? `${countActiveAccountsNow(sub.accounts)} actieve accounts` : `${sym}${sub.cost} ${sub.cost_period}`}>
-      {sym}{monthly.toFixed(2)}<span className="text-xs text-slate-400 ml-0.5">/mnd</span>
+    <span
+      className="tabular-nums"
+      title={hasAccounts ? `${countActiveAccountsNow(sub.accounts)} actieve accounts` : `${sym}${sub.cost} ${sub.cost_period}`}
+    >
+      {sym}{fmt(monthly)}<span className="text-xs text-slate-400 ml-0.5 font-normal">/mnd</span>
     </span>
   );
 }
@@ -131,9 +152,9 @@ function CostDisplay({ sub }) {
 function DaysLeft({ date, urgent }) {
   if (!date) return null;
   const days = Math.ceil((new Date(date) - new Date()) / (1000 * 60 * 60 * 24));
-  if (days < 0) return <span className="text-xs text-red-400">Verlopen</span>;
+  if (days < 0) return <span className="text-xs text-red-500 font-medium">Verlopen</span>;
   return (
-    <span className={`text-xs font-medium ${urgent ? 'text-orange-500' : 'text-slate-400'}`}>
+    <span className={`text-xs font-medium tabular-nums ${urgent ? 'text-orange-600' : 'text-slate-400'}`}>
       nog {days}d
     </span>
   );
@@ -145,7 +166,7 @@ function SubRow({ sub, onView, showUrgency, isSelectable, isSelected, onToggleSe
   return (
     <tr
       onClick={() => onView(sub)}
-      className={`group cursor-pointer border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors duration-100 ${isSelected ? 'bg-primary/5' : ''}`}
+      className={`cursor-pointer border-b border-slate-100 last:border-0 transition-colors ${isSelected ? 'bg-primary/5' : 'hover:bg-slate-50'}`}
     >
       {isSelectable && (
         <td className="pl-5 py-3.5 w-10" onClick={(e) => { e.stopPropagation(); onToggleSelect(sub.id); }}>
@@ -154,16 +175,16 @@ function SubRow({ sub, onView, showUrgency, isSelectable, isSelected, onToggleSe
             checked={isSelected}
             onChange={() => onToggleSelect(sub.id)}
             onClick={(e) => e.stopPropagation()}
-            className="rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+            className="rounded border-slate-300 text-primary focus:ring-primary/30 cursor-pointer"
             aria-label={`Selecteer ${sub.name}`}
           />
         </td>
       )}
-      <td className="px-5 py-3.5">
+      <td className="px-5 py-3">
         <div className="flex items-center gap-3">
           <SubLogo vendor={sub.vendor} name={sub.name} />
-          <div>
-            <p className="font-semibold text-dark text-sm">{sub.name}</p>
+          <div className="min-w-0">
+            <p className="font-semibold text-slate-900 text-sm truncate">{sub.name}</p>
             {(() => {
               const hasAccounts = sub.accounts?.length > 0;
               const activeCount = hasAccounts ? countActiveAccountsNow(sub.accounts) : 0;
@@ -171,9 +192,9 @@ function SubRow({ sub, onView, showUrgency, isSelectable, isSelected, onToggleSe
                 ? `${activeCount} actieve account${activeCount !== 1 ? 's' : ''}`
                 : sub.account_owner;
               return (sub.vendor || subtitle) && (
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-400 mt-0.5 truncate">
                   {sub.vendor}
-                  {sub.vendor && subtitle && <span className="mx-1">·</span>}
+                  {sub.vendor && subtitle && <span className="mx-1.5 text-slate-300">·</span>}
                   {subtitle && <span className="text-slate-500">{subtitle}</span>}
                 </p>
               );
@@ -181,36 +202,31 @@ function SubRow({ sub, onView, showUrgency, isSelectable, isSelected, onToggleSe
           </div>
         </div>
       </td>
-      <td className="px-5 py-3.5 hidden md:table-cell">
+      <td className="px-5 py-3 hidden md:table-cell">
         <div className="flex flex-col gap-1">
-          {sub.category
-            ? <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-xs font-medium w-fit">{sub.category}</span>
+          {sub.department
+            ? <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-medium w-fit">{sub.department}</span>
             : <span className="text-slate-300 text-xs">—</span>}
-          {sub.department && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-orange-50 text-orange-600 text-xs font-medium w-fit">{sub.department}</span>
+          {sub.category && (
+            <span className="text-xs text-slate-400 truncate">{sub.category}</span>
           )}
         </div>
       </td>
-      <td className="px-5 py-3.5 text-sm font-medium text-dark">
+      <td className="px-5 py-3 text-sm font-semibold text-slate-900">
         <CostDisplay sub={sub} />
       </td>
-      <td className="px-5 py-3.5 hidden lg:table-cell">
+      <td className="px-5 py-3 hidden lg:table-cell">
         {renewalDate ? (
           <div className="flex items-center gap-2">
-            <span className="text-sm text-slate-600">{formatDateLong(renewalDate)}</span>
+            <span className="text-sm text-slate-700 tabular-nums">{formatDateLong(renewalDate)}</span>
             {isUrgent && <DaysLeft date={renewalDate} urgent={true} />}
           </div>
         ) : (
           <span className="text-slate-300 text-xs">—</span>
         )}
       </td>
-      <td className="px-5 py-3.5 hidden sm:table-cell">
+      <td className="px-5 py-3 hidden sm:table-cell">
         <StatusBadge status={sub.status} />
-      </td>
-      <td className="px-5 py-3.5 text-right">
-        <span className="text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity font-medium">
-          Bekijken →
-        </span>
       </td>
     </tr>
   );
@@ -253,60 +269,63 @@ function Section({ title, rows, onView, showUrgency, accent, isSelectable, selec
   }) : rows;
 
   return (
-    <div className={`surface-card-strong overflow-hidden ${accent === 'orange' ? 'border-l-4 border-orange-400' : ''}`}>
+    <div className={`bg-white rounded-2xl border ${accent === 'orange' ? 'border-orange-200/80' : 'border-slate-200/70'} overflow-hidden`}>
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-50 transition-colors"
+        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-50/60 transition-colors group"
       >
-        <div className="flex items-center gap-3">
-          <span className="font-semibold text-dark">{title}</span>
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-            accent === 'orange' ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-500'
+        <div className="flex items-center gap-2.5">
+          {accent === 'orange' && <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />}
+          <span className="font-semibold text-slate-900">{title}</span>
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full tabular-nums ${
+            accent === 'orange' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600'
           }`}>{rows.length}</span>
         </div>
-        <span className="text-slate-400 text-xs">{open ? '▲' : '▼'}</span>
+        <ChevronDownIcon className={`h-4 w-4 text-slate-400 group-hover:text-slate-600 transition-all ${open ? '' : '-rotate-90'}`} />
       </button>
       {open && (
         <div className="border-t border-slate-100">
           {rows.length === 0 ? (
-            <p className="px-5 py-4 text-sm text-slate-400">Geen abonnementen.</p>
+            <p className="px-5 py-6 text-sm text-slate-400 text-center">Niets in deze categorie.</p>
           ) : (
             <table className="w-full text-sm table-fixed">
               <colgroup>
                 {isSelectable && <col style={{ width: '40px' }} />}
-                <col style={{ width: '30%' }} />
-                <col className="hidden md:table-column" style={{ width: '18%' }} />
+                <col style={{ width: '32%' }} />
+                <col className="hidden md:table-column" style={{ width: '20%' }} />
                 <col style={{ width: '16%' }} />
                 <col className="hidden lg:table-column" style={{ width: '22%' }} />
                 <col className="hidden sm:table-column" style={{ width: '10%' }} />
-                <col style={{ width: '10%' }} />
               </colgroup>
               <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/60">
+                <tr className="border-b border-slate-100 bg-slate-50/40">
                   {isSelectable && (
                     <th className="pl-5 py-2.5">
                       <input
                         type="checkbox"
                         checked={rows.length > 0 && rows.every(r => selected.has(r.id))}
                         onChange={() => onToggleAll(rows.map(r => r.id))}
-                        className="rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                        className="rounded border-slate-300 text-primary focus:ring-primary/30 cursor-pointer"
                         aria-label="Alles in deze sectie selecteren"
                       />
                     </th>
                   )}
-                  {COLUMNS.map(col => (
-                    <th
-                      key={col.key}
-                      onClick={() => handleSort(col.key)}
-                      className={`px-5 py-2.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wide cursor-pointer select-none hover:text-slate-600 transition-colors ${col.className}`}
-                    >
-                      {col.label}
-                      {sortKey === col.key
-                        ? <span className="ml-1 text-primary">{sortDir === 'asc' ? '↑' : '↓'}</span>
-                        : <span className="ml-1 opacity-30">↕</span>}
-                    </th>
-                  ))}
-                  <th className="px-5 py-2.5" />
+                  {COLUMNS.map(col => {
+                    const active = sortKey === col.key;
+                    const SortIcon = active ? (sortDir === 'asc' ? ArrowUpIcon : ArrowDownIcon) : ChevronUpDownIcon;
+                    return (
+                      <th
+                        key={col.key}
+                        onClick={() => handleSort(col.key)}
+                        className={`px-5 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider cursor-pointer select-none transition-colors ${active ? 'text-slate-700' : 'text-slate-400 hover:text-slate-600'} ${col.className}`}
+                      >
+                        <span className="inline-flex items-center gap-1">
+                          {col.label}
+                          <SortIcon className={`h-3 w-3 ${active ? 'text-primary' : 'opacity-40'}`} />
+                        </span>
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
@@ -484,52 +503,60 @@ function SubscriptionsPage() {
     .filter(s => s.status === 'actief')
     .reduce((sum, s) => sum + (toMonthly(s.cost, s.cost_period) || 0), 0);
 
+  const activeCount = subscriptions.filter(s => s.status === 'actief').length;
+  const filterSelectClass = "px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors hover:border-slate-300";
+
   return (
     <div className="p-6 space-y-4">
       {/* Header */}
-      <div className="surface-card-strong p-5 flex flex-col sm:flex-row justify-between gap-4">
+      <div className="flex flex-col sm:flex-row justify-between gap-4 items-start sm:items-end">
         <div>
-          <h1 className="text-2xl font-bold text-dark">Abonnementen</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            {subscriptions.filter(s => s.status === 'actief').length} actief · €{totalMonthly.toFixed(0)}/mnd
+          <h1 className="text-2xl font-bold text-slate-900">Abonnementen</h1>
+          <p className="text-sm text-slate-500 mt-1 tabular-nums">
+            {activeCount} actief · €{totalMonthly.toLocaleString('nl-NL', { maximumFractionDigits: 0 })} / mnd
           </p>
         </div>
-        <div className="flex gap-2 items-start">
-          <button onClick={() => setExportModalOpen(true)} className="btn-secondary text-sm">↓ CSV</button>
-          {isAdmin && <button onClick={handleAdd} className="btn-primary text-sm">+ Nieuw abonnement</button>}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setExportModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-700 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-colors"
+          >
+            <ArrowDownTrayIcon className="h-4 w-4" />
+            CSV
+          </button>
+          {isAdmin && (
+            <button
+              onClick={handleAdd}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-white bg-primary shadow-sm hover:brightness-110 transition-all"
+            >
+              <PlusIcon className="h-4 w-4" />
+              Nieuw abonnement
+            </button>
+          )}
         </div>
       </div>
 
       {/* Filters */}
-      <div className="surface-card p-3 flex flex-col sm:flex-row gap-2">
-        <input
-          type="text"
-          placeholder="Zoek op naam of leverancier…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="field-strong flex-1 px-3 py-2 rounded-md border text-sm focus:outline-none"
-        />
-        <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="field-strong px-3 py-2 rounded-md border text-sm focus:outline-none"
-        >
+      <div className="bg-white rounded-2xl border border-slate-200/70 p-3 flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1">
+          <MagnifyingGlassIcon className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Zoek op naam, leverancier of medewerker…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
+          />
+        </div>
+        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className={filterSelectClass}>
           <option value="">Alle categorieën</option>
           {categories.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        <select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className="field-strong px-3 py-2 rounded-md border text-sm focus:outline-none"
-        >
+        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={filterSelectClass}>
           <option value="">Alle types</option>
           {typesList.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
-        <select
-          value={departmentFilter}
-          onChange={(e) => setDepartmentFilter(e.target.value)}
-          className="field-strong px-3 py-2 rounded-md border text-sm focus:outline-none"
-        >
+        <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)} className={filterSelectClass}>
           <option value="">Alle afdelingen</option>
           {departmentsList.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
@@ -537,14 +564,19 @@ function SubscriptionsPage() {
 
       {/* Sections */}
       {subscriptions.length === 0 ? (
-        <div className="surface-card-strong p-12 text-center">
-          <div className="mx-auto h-16 w-16 rounded-3xl bg-primary/10 flex items-center justify-center text-primary text-3xl mb-4">+</div>
-          <h2 className="text-lg font-semibold text-dark">Nog geen abonnementen</h2>
-          <p className="text-sm text-slate-500 mt-2 max-w-md mx-auto">
-            Voeg je eerste abonnement toe om kosten in beeld te krijgen, evaluaties te beheren en verlopingsdatums te volgen.
+        <div className="bg-white rounded-2xl border border-slate-200/70 p-16 text-center">
+          <h2 className="text-xl font-semibold text-slate-900">Nog geen abonnementen</h2>
+          <p className="text-sm text-slate-500 mt-3 max-w-md mx-auto">
+            Voeg je eerste abonnement toe — kosten, evaluaties en verlopingsdatums verschijnen automatisch.
           </p>
           {isAdmin && (
-            <button onClick={handleAdd} className="btn-primary text-sm mt-5">+ Eerste abonnement toevoegen</button>
+            <button
+              onClick={handleAdd}
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-semibold text-white bg-primary shadow-sm hover:brightness-110 transition-all mt-6"
+            >
+              <PlusIcon className="h-4 w-4" />
+              Eerste abonnement toevoegen
+            </button>
           )}
         </div>
       ) : (
@@ -596,26 +628,30 @@ function SubscriptionsPage() {
 
       {/* Bulk action bar */}
       {selected.size > 0 && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 surface-card-strong shadow-2xl rounded-full px-5 py-3 flex items-center gap-3 border-2 border-primary/20">
-          <span className="text-sm font-medium text-dark">{selected.size} geselecteerd</span>
-          <span className="w-px h-5 bg-slate-200" />
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 backdrop-blur-xl rounded-full px-5 py-2.5 flex items-center gap-1 shadow-2xl ring-1 ring-white/10">
+          <span className="text-sm font-medium text-white tabular-nums px-2">
+            {selected.size} geselecteerd
+          </span>
+          <span className="w-px h-5 bg-slate-700 mx-1" />
           <button
             onClick={() => setBulkEditOpen(true)}
-            className="text-sm font-medium text-primary hover:bg-primary/10 px-3 py-1.5 rounded-full transition-colors"
+            className="text-sm font-medium text-slate-200 hover:text-white hover:bg-white/10 px-3 py-1.5 rounded-full transition-colors"
           >
             Wijzigen
           </button>
           <button
             onClick={() => setBulkDeleteOpen(true)}
-            className="text-sm font-medium text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-full transition-colors"
+            className="text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 px-3 py-1.5 rounded-full transition-colors"
           >
             Verwijderen
           </button>
+          <span className="w-px h-5 bg-slate-700 mx-1" />
           <button
             onClick={clearSelection}
-            className="text-sm text-slate-500 hover:text-dark px-3 py-1.5 rounded-full transition-colors"
+            className="text-sm text-slate-400 hover:text-white px-2 py-1.5 rounded-full transition-colors"
+            aria-label="Selectie wissen"
           >
-            Annuleren
+            ✕
           </button>
         </div>
       )}
@@ -634,25 +670,27 @@ function SubscriptionsPage() {
       {bulkDeleteOpen && (
         <Modal onClose={() => !bulkDeleting && setBulkDeleteOpen(false)} size="md" ariaLabel="Bulkverwijdering bevestigen">
           <div className="p-6 space-y-4">
-            <h2 className="text-lg font-bold text-dark">Abonnementen verwijderen?</h2>
-            <p className="text-sm text-slate-600">
-              Je staat op het punt <strong>{selected.size} abonnement{selected.size !== 1 ? 'en' : ''}</strong> te verwijderen.
-              Dit kan niet ongedaan gemaakt worden.
-            </p>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Abonnementen verwijderen?</h2>
+              <p className="text-sm text-slate-500 mt-1">
+                Je staat op het punt <strong className="text-slate-900 tabular-nums">{selected.size} abonnement{selected.size !== 1 ? 'en' : ''}</strong> te verwijderen.
+                Dit kan niet ongedaan gemaakt worden.
+              </p>
+            </div>
             <div className="flex justify-end gap-3 pt-2">
               <button
                 onClick={() => setBulkDeleteOpen(false)}
                 disabled={bulkDeleting}
-                className="btn-secondary"
+                className="px-4 py-2 rounded-lg text-sm font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-colors disabled:opacity-50"
               >
                 Annuleren
               </button>
               <button
                 onClick={handleBulkDelete}
                 disabled={bulkDeleting}
-                className="rounded-md bg-red-500 hover:bg-red-600 text-white px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50"
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-red-500 hover:bg-red-600 transition-colors disabled:opacity-50"
               >
-                {bulkDeleting ? 'Verwijderen...' : `Ja, verwijder ${selected.size}`}
+                {bulkDeleting ? 'Verwijderen…' : `Ja, verwijder ${selected.size}`}
               </button>
             </div>
           </div>
