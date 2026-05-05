@@ -235,7 +235,7 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period }) 
                         type="text"
                         value={account.owner_name || ''}
                         onChange={(e) => updateByKey(key, { owner_name: e.target.value })}
-                        placeholder="Bijv. Joris van den Hoven"
+                        placeholder="Naam"
                         className={inputClass}
                       />
                     </div>
