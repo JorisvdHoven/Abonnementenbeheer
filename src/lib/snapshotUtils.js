@@ -9,8 +9,10 @@ const BILLING_FACTORS = {
 function isAccountActiveInRange(account, firstDay, lastDay) {
   const start = account.start_date ? new Date(account.start_date) : null;
   const end = account.end_date ? new Date(account.end_date) : null;
+  const archivedAt = account.archived_at ? new Date(account.archived_at) : null;
   if (start && start > lastDay) return false;
   if (end && end < firstDay && !account.auto_renew) return false;
+  if (archivedAt && archivedAt < firstDay) return false;
   return true;
 }
 

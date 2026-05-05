@@ -72,22 +72,64 @@ export function useSubscriptions() {
     return { data: saved };
   };
 
-  const deleteSubscription = async (id, { silent = false } = {}) => {
+  // Soft delete: zet archived_at op nu, snapshots blijven onaangeroerd (historiek bewaard)
+  const archiveSubscription = async (id, { silent = false } = {}) => {
+    const archivedAt = new Date().toISOString();
+    const { data, error } = await supabase
+      .from('subscriptions')
+      .update({ archived_at: archivedAt })
+      .eq('id', id)
+      .select();
+
+    if (error) {
+      console.error('Error archiving subscription:', error);
+      if (!silent) toast.error(`Archiveren mislukt: ${error.message}`);
+      return { error };
+    }
+    const updated = data[0];
+    setSubscriptions(prev => prev.map(s => s.id === id ? updated : s));
+    if (!silent) toast.success('Verplaatst naar archief.');
+    return { ok: true };
+  };
+
+  // Restore: zet archived_at terug op null
+  const restoreSubscription = async (id, { silent = false } = {}) => {
+    const { data, error } = await supabase
+      .from('subscriptions')
+      .update({ archived_at: null })
+      .eq('id', id)
+      .select();
+
+    if (error) {
+      console.error('Error restoring subscription:', error);
+      if (!silent) toast.error(`Herstellen mislukt: ${error.message}`);
+      return { error };
+    }
+    const updated = data[0];
+    setSubscriptions(prev => prev.map(s => s.id === id ? updated : s));
+    if (!silent) toast.success('Hersteld uit archief.');
+    return { ok: true };
+  };
+
+  // Backwards-compatible: deleteSubscription = archive (soft delete)
+  const deleteSubscription = archiveSubscription;
+
+  // Hard delete: verwijdert uit DB EN uit alle historische snapshots. Niet ongedaan te maken.
+  const permanentlyDeleteSubscription = async (id, { silent = false } = {}) => {
     const { error } = await supabase
       .from('subscriptions')
       .delete()
       .eq('id', id);
 
     if (error) {
-      console.error('Error deleting subscription:', error);
-      if (!silent) toast.error(`Verwijderen mislukt: ${error.message}`);
+      console.error('Error permanently deleting subscription:', error);
+      if (!silent) toast.error(`Definitief verwijderen mislukt: ${error.message}`);
       return { error };
-    } else {
-      setSubscriptions(prev => prev.filter(sub => sub.id !== id));
-      await removeSubscriptionFromSnapshots(supabase, id);
-      if (!silent) toast.success('Abonnement verwijderd.');
-      return { ok: true };
     }
+    setSubscriptions(prev => prev.filter(sub => sub.id !== id));
+    await removeSubscriptionFromSnapshots(supabase, id);
+    if (!silent) toast.success('Definitief verwijderd.');
+    return { ok: true };
   };
 
   return {
@@ -96,6 +138,9 @@ export function useSubscriptions() {
     addSubscription,
     updateSubscription,
     deleteSubscription,
+    archiveSubscription,
+    restoreSubscription,
+    permanentlyDeleteSubscription,
     refetch: fetchSubscriptions,
   };
 }

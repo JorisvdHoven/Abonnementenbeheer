@@ -369,7 +369,7 @@ function DashboardPage() {
 
   if (subsLoading || evalLoading) return <div className="p-6">Loading...</div>;
 
-  const activeSubs = subscriptions.filter(s => s.status === 'actief');
+  const activeSubs = subscriptions.filter(s => s.status === 'actief' && !s.archived_at);
   const totalMonthlyCost = activeSubs.reduce((sum, s) => sum + toEurMonthly(s), 0);
   const totalYearlyCost = totalMonthlyCost * 12;
   const foreignCurrencies = [...new Set(activeSubs.map(s => s.currency).filter(c => c && c !== 'EUR'))];

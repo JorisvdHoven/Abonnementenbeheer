@@ -21,6 +21,8 @@ import {
   ChevronUpDownIcon,
   ArrowUpIcon,
   ArrowDownIcon,
+  ArrowUturnLeftIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline';
 
 const EXPORT_FIELDS = [
@@ -352,8 +354,74 @@ function Section({ title, rows, onView, showUrgency, accent, isSelectable, selec
   );
 }
 
+// Sectie voor gearchiveerde abonnementen — Restore + Definitief verwijderen acties
+function ArchiveSection({ rows, onView, onRestore, onPermanentDelete }) {
+  const [open, setOpen] = useState(false); // dichtgeklapt by default
+  if (rows.length === 0) return null;
+
+  // Sorteer op archived_at desc (recentste bovenaan)
+  const sorted = [...rows].sort((a, b) => new Date(b.archived_at) - new Date(a.archived_at));
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200/70 overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-50/60 transition-colors group"
+      >
+        <div className="flex items-center gap-2.5">
+          <span className="font-semibold text-slate-500">Archief</span>
+          <span className="text-xs font-semibold px-2 py-0.5 rounded-full tabular-nums bg-slate-100 text-slate-600">{rows.length}</span>
+        </div>
+        <ChevronDownIcon className={`h-4 w-4 text-slate-400 group-hover:text-slate-600 transition-all ${open ? '' : '-rotate-90'}`} />
+      </button>
+      {open && (
+        <div className="border-t border-slate-100">
+          {sorted.map(sub => (
+            <div
+              key={sub.id}
+              className="flex items-center gap-3 px-5 py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50/40 transition-colors"
+            >
+              <div
+                onClick={() => onView(sub)}
+                className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
+              >
+                <SubLogo vendor={sub.vendor} name={sub.name} />
+                <div className="min-w-0">
+                  <p className="font-medium text-slate-700 text-sm truncate">{sub.name}</p>
+                  <p className="text-xs text-slate-400 truncate tabular-nums">
+                    {sub.vendor && <>{sub.vendor} · </>}
+                    gearchiveerd {formatDateLong(sub.archived_at)}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <button
+                  onClick={() => onRestore(sub.id)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+                  title="Herstellen — terug naar actieve lijst"
+                >
+                  <ArrowUturnLeftIcon className="h-3.5 w-3.5" />
+                  Herstellen
+                </button>
+                <button
+                  onClick={() => onPermanentDelete(sub.id)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors"
+                  title="Definitief verwijderen — incl. alle historische cashflow data"
+                >
+                  <TrashIcon className="h-3.5 w-3.5" />
+                  Definitief
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SubscriptionsPage() {
-  const { subscriptions, loading, addSubscription, updateSubscription, deleteSubscription, refetch } = useSubscriptions();
+  const { subscriptions, loading, addSubscription, updateSubscription, deleteSubscription, restoreSubscription, permanentlyDeleteSubscription, refetch } = useSubscriptions();
   const { categories: settingCategories, types, departments: settingDepartments, addCategory, addType, addDepartment } = useSettings();
   const { isAdmin } = useCurrentUser();
   const [search, setSearch] = useState('');
@@ -445,7 +513,12 @@ function SubscriptionsPage() {
 
   const now = new Date();
   const soon = addDays(now, 60);
-  const filtered = applyFilters(subscriptions);
+  // Splits eerst: actieve (niet gearchiveerd) versus archief
+  const liveSubscriptions = subscriptions.filter(s => !s.archived_at);
+  const archivedSubscriptions = subscriptions.filter(s => s.archived_at);
+
+  const filtered = applyFilters(liveSubscriptions);
+  const filteredArchived = applyFilters(archivedSubscriptions);
 
   const expiringSoon = filtered.filter(s => {
     if (s.status !== 'actief' || s.auto_renew) return false;
@@ -460,8 +533,16 @@ function SubscriptionsPage() {
   const handleEdit   = (sub) => { setDetailSub(null); setEditingSub(sub); setModalOpen(true); };
   const handleAdd    = () => { setEditingSub(null); setModalOpen(true); };
   const handleDelete = async (id) => {
-    if (confirm('Weet je zeker dat je dit abonnement wilt verwijderen?')) {
-      await deleteSubscription(id);
+    // Soft delete (archive) — geen confirm nodig, is reversible
+    await deleteSubscription(id);
+    setDetailSub(null);
+  };
+  const handleRestore = async (id) => {
+    await restoreSubscription(id);
+  };
+  const handlePermanentDelete = async (id) => {
+    if (confirm('Definitief verwijderen? Dit verwijdert het abonnement én alle historische cashflow data. Niet ongedaan te maken.')) {
+      await permanentlyDeleteSubscription(id);
       setDetailSub(null);
     }
   };
@@ -609,6 +690,14 @@ function SubscriptionsPage() {
             isSelectable={isAdmin} selected={selected} onToggleSelect={toggleSelect} onToggleAll={toggleSelectMany} />
           <Section title="Opgezegd" rows={opgezegd} onView={handleView}
             isSelectable={isAdmin} selected={selected} onToggleSelect={toggleSelect} onToggleAll={toggleSelectMany} />
+          {isAdmin && (
+            <ArchiveSection
+              rows={filteredArchived}
+              onView={handleView}
+              onRestore={handleRestore}
+              onPermanentDelete={handlePermanentDelete}
+            />
+          )}
         </>
       )}
 
