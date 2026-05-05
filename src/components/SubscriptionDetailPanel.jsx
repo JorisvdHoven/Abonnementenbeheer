@@ -55,11 +55,18 @@ function AccountRow({ acc, parentCost, currency }) {
   const today = new Date();
   const start = acc.start_date ? new Date(acc.start_date) : null;
   const end = acc.end_date ? new Date(acc.end_date) : null;
+  const isArchived = !!acc.archived_at;
   // Met auto_renew aan: cron houdt end_date in de toekomst, dus altijd actief vanaf start
-  const isActive = (!start || start <= today) && (!end || end >= today || acc.auto_renew);
-  const isFuture = start && start > today;
-  const stateLabel = isActive ? 'Actief' : isFuture ? 'Toekomstig' : 'Beëindigd';
-  const stateColor = isActive ? 'bg-green-500' : isFuture ? 'bg-blue-500' : 'bg-slate-400';
+  const isActive = !isArchived
+    && (!start || start <= today)
+    && (!end || end >= today || acc.auto_renew);
+  const isFuture = !isArchived && start && start > today;
+  const stateLabel = isArchived
+    ? 'Gearchiveerd'
+    : isActive ? 'Actief' : isFuture ? 'Toekomstig' : 'Beëindigd';
+  const stateColor = isArchived
+    ? 'bg-slate-300'
+    : isActive ? 'bg-green-500' : isFuture ? 'bg-blue-500' : 'bg-slate-400';
 
   const accountCost = acc.cost !== null && acc.cost !== undefined && acc.cost !== ''
     ? parseFloat(acc.cost)
@@ -67,12 +74,12 @@ function AccountRow({ acc, parentCost, currency }) {
   const isCustomPrice = accountCost !== null && accountCost !== parseFloat(parentCost);
 
   return (
-    <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 last:border-0">
+    <div className={`flex items-center gap-3 py-2.5 border-b border-slate-100 last:border-0 ${isArchived ? 'opacity-60' : ''}`}>
       <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${stateColor}`} />
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-slate-900 truncate flex items-center gap-1.5">
+        <p className={`text-sm font-medium truncate flex items-center gap-1.5 ${isArchived ? 'text-slate-500 line-through decoration-slate-300' : 'text-slate-900'}`}>
           {acc.owner_name || 'Zonder naam'}
-          {acc.auto_renew && (
+          {acc.auto_renew && !isArchived && (
             <span title="Auto-verlenging aan" className="text-[10px] text-primary font-semibold">↻</span>
           )}
         </p>
@@ -110,7 +117,10 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
 
   if (!sub) return null;
 
-  const hasAccounts = sub.accounts && sub.accounts.length > 0;
+  const liveAccounts = (sub.accounts || []).filter(a => !a.archived_at);
+  const archivedAccounts = (sub.accounts || []).filter(a => a.archived_at);
+  const hasAccounts = (sub.accounts || []).length > 0;
+  const hasLiveAccounts = liveAccounts.length > 0;
   const activeAccountCount = hasAccounts ? countActiveAccountsNow(sub.accounts) : 0;
   const baseCost = parseFloat(sub.base_cost) || 0;
   const isVariable = !!sub.is_variable_cost;
@@ -119,7 +129,7 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
   let variablePerPeriod = parseFloat(sub.cost) || 0;
   if (hasAccounts) {
     const today = new Date();
-    variablePerPeriod = sub.accounts
+    variablePerPeriod = liveAccounts
       .filter(a => {
         const start = a.start_date ? new Date(a.start_date) : null;
         const end = a.end_date ? new Date(a.end_date) : null;
@@ -232,9 +242,9 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
           </Section>
 
           {hasAccounts && (
-            <Section title={`Accounts · ${sub.accounts.length}`}>
+            <Section title={`Accounts · ${liveAccounts.length}`}>
               <div>
-                {sub.accounts.map(acc => (
+                {liveAccounts.map(acc => (
                   <AccountRow
                     key={acc.id}
                     acc={acc}
@@ -242,7 +252,27 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
                     currency={sub.currency}
                   />
                 ))}
+                {!hasLiveAccounts && (
+                  <p className="text-sm text-slate-400 italic py-2">Geen actieve accounts</p>
+                )}
               </div>
+              {archivedAccounts.length > 0 && (
+                <div className="mt-4 pt-3 border-t border-slate-100">
+                  <p className="text-[11px] uppercase tracking-wide font-semibold text-slate-400 mb-1">
+                    Gearchiveerd · {archivedAccounts.length}
+                  </p>
+                  <div>
+                    {archivedAccounts.map(acc => (
+                      <AccountRow
+                        key={acc.id}
+                        acc={acc}
+                        parentCost={sub.cost}
+                        currency={sub.currency}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </Section>
           )}
 
