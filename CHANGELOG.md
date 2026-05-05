@@ -1,5 +1,108 @@
 # Changelog — Flexurity
 
+## V3.0 — Mei 2026
+
+### Highlights
+
+- **Multi-account abonnementen** — abonnementen zoals ChatGPT Plus voor meerdere medewerkers krijgen één regel met losse accounts eronder. Elk account heeft eigen vervaldatum, auto-verlenging en (optioneel) eigen prijs
+- **Archief in plaats van verwijderen** — abonnementen én accounts gaan bij verwijderen naar het archief, zodat historische cashflow nooit verloren gaat. Restore en definitief verwijderen blijven mogelijk
+- **Vijf duidelijke kostenmodellen** — vast bedrag, per gebruiker, per persoonlijk account, vaste licentie + per gebruiker, op basis van verbruik. Eén dropdown ipv losse toggles
+- **FX-rates uit de database** — wisselkoersen staan nu org-wide in Postgres ipv localStorage. Snapshots bewaren de gebruikte koers per regel zodat historische bedragen achteraf herleidbaar zijn
+- **Modernere UI** — Linear/Vercel-stijl met dotted-underline links, glassmorphism tooltips, amber-confirm voor reversibele acties
+
+---
+
+### Alle wijzigingen
+
+#### Multi-account abonnementen
+- Nieuw kostenmodel `per_account` — een sub kan meerdere persoonlijke accounts hebben (bijv. ChatGPT Plus voor 3 medewerkers)
+- Per account: naam, startdatum, vervaldatum, auto-verlenging, optionele eigen prijs (anders fallback op parent cost)
+- Auto-verlenging-pill (↻) inline naast vervaldatum — geen verschuiving van velden meer
+- DB-cron `advance_subscription_renewals` schuift account-vervaldatums automatisch door bij auto-verlenging aan
+- Detailpaneel toont alleen de actieve accounts in een aparte "Accounts · N" sectie
+- Bij `per_account` worden parent-vervaldatum en parent-auto-verlenging verborgen (geldt niet meer)
+
+#### Archief (soft-delete)
+- Abonnementen verwijderen verplaatst ze naar een gearchiveerde sectie onderaan de Abonnementen-pagina (collapsible, dichtgeklapt by default)
+- Counter "X in archief" als dotted-underline link in de subtitle — smooth scroll naar de sectie
+- Restore + Definitief verwijderen per gearchiveerd abonnement
+- Account-niveau archief in de modal: collapsible "Gearchiveerd (N)" sectie binnen AccountsManager
+- Bulk-verwijderen heet nu "Bulk-archiveren" — knop in amber ipv rood, copy "verplaatst naar archief"
+- Empty-state in archief bij gefilterde zoektocht: "Geen gearchiveerde abonnementen voor deze filters · 0 van N"
+- Cron functies (`take_daily_snapshot`, `advance_subscription_renewals`) negeren gearchiveerde rijen
+- `countActiveAccountsNow` is strikter dan historische logic — UI badges dalen direct na archive, snapshots blijven historisch
+
+#### Kostenmodellen
+- Vijf mutually-exclusive billing models in één dropdown:
+  - Vast bedrag (`flat`)
+  - Per gebruiker (`per_seat`)
+  - Per persoonlijk account (`per_account`)
+  - Vaste licentie + per gebruiker (`license_plus_seats`)
+  - Op basis van verbruik (`variable`)
+- Filter "Alle kostenmodellen" op de Abonnementen-pagina
+- `getBillingModel(sub)` afgeleid uit bestaande velden — één bron van waarheid
+
+#### FX-rates
+- Nieuwe DB-tabel `exchange_rates` (currency PK + rate + updated_at) met seed USD/GBP/CHF
+- RPC `upsert_exchange_rate` — authenticated-only, EUR rate impliciet 1.0
+- `take_daily_snapshot()` is FX-aware: `total_cost` en `monthly_equivalent` in EUR, `monthly_equivalent_native` + `fx_rate` per detail bewaard
+- JS `backfillSubscriptionSnapshots` idem — historische maanden hebben nu opgeslagen koers
+- Wisselkoers-instelling synct naar DB via RPC ipv localStorage (localStorage blijft als snel-pad)
+
+#### Taxonomieën
+- Categorie / afdeling hernoemen via Postgres RPC (`rename_subscription_category`, `rename_subscription_department`) — atomair binnen één transactie
+- Master + cascade naar subscriptions slagen of falen samen, geen out-of-sync staat meer
+- Toast meldt hoeveel abonnementen zijn bijgewerkt
+
+#### UI / UX
+- AccountsManager mobile-friendly: op telefoon eigen header-rij met "Account 1/2/3" label + archive-knop rechtsboven
+- Modal-grid op desktop blijft `[1fr,140px,180px,140px,auto]`, valt netjes terug naar 1 kolom < 640px
+- Subscription-tabel: dotted-underline link "X in archief" in subtitle
+- Filter-counts in MultiSelect dropdowns negeren gearchiveerde subs
+- Bulk-archive confirm: kleur amber + copy uitlegt dat data bewaard blijft + restore mogelijk is
+- Permanent-delete confirm-tekst voor accounts is eerlijker over timing (pas definitief na save)
+- DetailPanel verbergt gearchiveerde accounts uit de hoofdlijst (anders rommel na 3 jaar)
+- Generieke placeholder "Naam" voor account-eigenaar (geen persoonlijk voorbeeld meer)
+
+#### Foutafhandeling
+- `persistAccounts` gooit nu errors per stap (insert/update/delete) ipv stille fail
+- `handleSubmit` in modal vangt accounts/snapshot-errors op met try/catch + duidelijke error-toast
+- Sub wordt sowieso opgeslagen, gebruiker krijgt advies om opnieuw te openen + controleren bij sync-failure
+
+---
+
+### Supabase
+
+#### Database
+- Nieuwe kolom `archived_at` op `subscriptions` en `subscription_accounts` — soft-delete pattern, alleen `NULL` betekent actief
+- Nieuwe tabel `subscription_accounts` — multi-account per subscription, met eigen `start_date`, `end_date`, `auto_renew`, `cost`, `archived_at`
+- Nieuwe tabel `exchange_rates` — org-wide wisselkoersen, currency als PK
+- FK `subscription_accounts.subscription_id ON DELETE CASCADE` — geen orphan accounts bij permanent delete
+
+#### Functies (SECURITY DEFINER + REVOKE/GRANT authenticated)
+- `take_daily_snapshot()` — herschreven, account-aware + archive-aware + FX-aware
+- `advance_subscription_renewals()` — cycled vervaldatums door op auto-verlenging, skipt archived
+- `rename_subscription_category(p_id, p_new_name)` — transactionele rename met cascade
+- `rename_subscription_department(p_id, p_new_name)` — idem voor afdelingen
+- `upsert_exchange_rate(p_currency, p_rate)` — wisselkoers updaten
+
+#### Cron (pg_cron)
+- `0 2 * * *` → `daily-subscription-snapshot` — dagelijkse snapshot van huidige maand (org-wide)
+- `30 2 * * *` → `advance-subscription-renewals` — dagelijks om 02:30
+- `0 2 * * *` → `update-expired-subscriptions` — ongewijzigd
+- `monthly-snapshot` (Edge Function cron) — uitgeschakeld; daily snapshot vervangt deze
+
+---
+
+### Technisch
+- Nieuwe gedeelde helper `activeAccountsNow(accounts)` in `costUtils.js` — één bron voor "welke accounts tellen NU mee"
+- `countActiveAccountsNow` is nu een wrapper rond `activeAccountsNow`
+- Modal preview, DetailPanel en lijst gebruiken allemaal dezelfde actief-definitie — geen 1-account verschillen meer
+- `recomputeSubscriptionSnapshots` wordt na elke account-mutatie aangeroepen om historische maanden up-to-date te houden
+- `BILLING_MODELS` constanten in `costUtils.js` — single source of truth voor labels en filter-opties
+
+---
+
 ## v2.0.0 — April 2026
 
 ### Highlights
