@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { BILLING_PERIODS, toMonthly } from '../lib/costUtils';
 import { currencySymbol } from '../lib/format';
-import { ChevronDownIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { ChevronDownIcon, PlusIcon, TrashIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
 import { SubLogo } from './SubLogo';
 import Modal from './Modal';
 import { recomputeSubscriptionSnapshots } from '../lib/snapshotUtils';
@@ -167,7 +167,27 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period }) 
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50/50 overflow-hidden">
       <div className="px-3.5 py-2.5 bg-slate-100/70 flex items-center justify-between text-xs">
-        <span className="font-medium text-slate-600">{accounts.length} account{accounts.length !== 1 ? 's' : ''}</span>
+        <span className="font-medium text-slate-600 flex items-center gap-1.5">
+          {accounts.length} account{accounts.length !== 1 ? 's' : ''}
+          <span className="relative group">
+            <InformationCircleIcon className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 cursor-help transition-colors" />
+            <span className="absolute left-0 top-5 z-20 hidden group-hover:block w-72 rounded-xl bg-slate-900 text-white text-xs p-3.5 shadow-xl ring-1 ring-white/10 leading-relaxed font-normal normal-case tracking-normal">
+              <p className="font-semibold mb-1.5">Hoe werken accounts?</p>
+              <p className="text-slate-300 mb-2">
+                Elke account heeft zijn eigen <strong className="text-white">start- en einddatum</strong>.
+                Dit is de levenscyclus van die specifieke gebruiker.
+              </p>
+              <p className="text-slate-300 mb-2">
+                <strong className="text-white">Einddatum leeg</strong> = doorlopend (∞). Iemand verlaat het bedrijf?
+                Vul de laatste werkdag in.
+              </p>
+              <p className="text-slate-300">
+                De vervaldatum + auto-verlenging op het abonnement zelf zijn voor het
+                hoofdcontract met de leverancier — niet per gebruiker.
+              </p>
+            </span>
+          </span>
+        </span>
         {totalMonthly > 0 && (
           <span className="text-slate-500">≈ {sym}{totalMonthly.toFixed(2)} totaal/mnd</span>
         )}
@@ -764,9 +784,11 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
               value={formData.renewal_date}
               error={fieldErrors.renewal_date}
               hint={!fieldErrors.renewal_date
-                ? (formData.auto_renew
-                    ? 'Schuift automatisch door naar volgende periode op deze datum.'
-                    : 'Op deze datum stopt het abonnement (tenzij verlengd).')
+                ? (isPerAccount
+                    ? 'Wanneer het hoofdcontract met de leverancier verloopt. Per-account dates regel je hierboven.'
+                    : (formData.auto_renew
+                        ? 'Schuift automatisch door naar volgende periode op deze datum.'
+                        : 'Op deze datum stopt het abonnement (tenzij verlengd).'))
                 : undefined}
             >
               <input type="date" name="renewal_date" value={formData.renewal_date} onChange={handleChange} className={fieldErrors.renewal_date ? inputClassError : inputClass} />
@@ -775,9 +797,11 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
           <div className="rounded-lg bg-slate-50 border border-slate-100 px-4 py-3">
             <ToggleSwitch
               label="Auto-verlenging"
-              hint={formData.auto_renew
-                ? 'Vervaldatum schuift automatisch door bij elke periode. Het abonnement blijft actief.'
-                : 'Abonnement stopt op de vervaldatum. Schakel uit voor abonnementen die je opzegt.'}
+              hint={isPerAccount
+                ? 'Geldt voor het hoofdcontract met de leverancier — niet voor individuele accounts.'
+                : (formData.auto_renew
+                    ? 'Vervaldatum schuift automatisch door bij elke periode. Het abonnement blijft actief.'
+                    : 'Abonnement stopt op de vervaldatum. Schakel uit voor abonnementen die je opzegt.')}
               checked={formData.auto_renew}
               onChange={(v) => setFormData(prev => ({ ...prev, auto_renew: v }))}
             />
