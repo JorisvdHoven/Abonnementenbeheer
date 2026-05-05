@@ -241,7 +241,7 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
             {!hasAccounts && <DetailRow label="Gebruikers" value={sub.seats} mono />}
           </Section>
 
-          {hasAccounts && (
+          {hasLiveAccounts && (
             <Section title={`Accounts · ${liveAccounts.length}`}>
               <div>
                 {liveAccounts.map(acc => (
@@ -252,27 +252,7 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
                     currency={sub.currency}
                   />
                 ))}
-                {!hasLiveAccounts && (
-                  <p className="text-sm text-slate-400 italic py-2">Geen actieve accounts</p>
-                )}
               </div>
-              {archivedAccounts.length > 0 && (
-                <div className="mt-4 pt-3 border-t border-slate-100">
-                  <p className="text-[11px] uppercase tracking-wide font-semibold text-slate-400 mb-1">
-                    Gearchiveerd · {archivedAccounts.length}
-                  </p>
-                  <div>
-                    {archivedAccounts.map(acc => (
-                      <AccountRow
-                        key={acc.id}
-                        acc={acc}
-                        parentCost={sub.cost}
-                        currency={sub.currency}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
             </Section>
           )}
 
