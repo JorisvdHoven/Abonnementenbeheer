@@ -286,7 +286,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
   const isLicSeats   = billingModel === 'license_plus_seats';
   const isVariable   = billingModel === 'variable';
   const showSeats    = isPerSeat || isLicSeats;
-  const showBase     = isLicSeats;
+  const showBase     = isLicSeats || isVariable;
   const showAccounts = isPerAccount;
 
   useEffect(() => {
@@ -610,7 +610,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
               {isPerSeat     && <>Iedere gebruiker betaalt hetzelfde tarief × aantal gebruikers. Bv. Microsoft 365, Slack Pro.</>}
               {isPerAccount  && <>Iedere medewerker heeft een eigen account met eigen start-/einddatum en eventueel eigen prijs. Bv. LinkedIn Pro, Adobe individueel.</>}
               {isLicSeats    && <>Vaste licentie naast variabele kosten per gebruiker. Bv. Carerix (€300 licentie + €10/gebruiker).</>}
-              {isVariable    && <>Bedrag varieert per maand op basis van gebruik. Vul een schatting in — wordt overal getoond met ±. Bv. AWS, Stripe fees, OpenAI API.</>}
+              {isVariable    && <>Bedrag varieert per maand op basis van gebruik — vul een schatting in. Optioneel: voeg vaste licentiekosten toe als die er ook zijn. Bv. AWS, Stripe fees, OpenAI API.</>}
             </p>
           </Field>
 
@@ -653,12 +653,14 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
             </Field>
           </FieldGrid>
 
-          {/* Conditional: vaste licentiekosten (alleen license_plus_seats) */}
+          {/* Conditional: vaste licentiekosten (license_plus_seats of variable) */}
           {showBase && (
             <Field
-              label="Vaste licentiekosten"
+              label={isVariable ? 'Vaste licentiekosten (optioneel)' : 'Vaste licentiekosten'}
               value={formData.base_cost}
-              hint="Wordt opgeteld bij de per-gebruiker kosten."
+              hint={isVariable
+                ? 'Wordt opgeteld bij de variabele kosten. Laat leeg als er geen vast licentiedeel is.'
+                : 'Wordt opgeteld bij de per-gebruiker kosten.'}
             >
               <div className="flex max-w-xs">
                 <span className="px-3 py-2 border border-slate-200 border-r-0 rounded-l-md bg-slate-50 text-sm text-slate-500">{sym}</span>
@@ -716,7 +718,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
                   <span className="text-slate-400 ml-1">/mnd</span>
                   {showBreakdown && (
                     <span className="ml-3 text-slate-400">
-                      ({sym}{baseFeeMonthly.toFixed(2)} licentie + {sym}{variableMonthly.toFixed(2)} variabel)
+                      ({sym}{baseFeeMonthly.toFixed(2)} licentie + {isVariable ? '± ' : ''}{sym}{variableMonthly.toFixed(2)} {isVariable ? 'verbruik' : 'variabel'})
                     </span>
                   )}
                 </div>

@@ -200,7 +200,7 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
               <p className="text-xs text-slate-500 mt-1 tabular-nums">
                 <span className="text-slate-400">{sym}{fmtAmount(baseCost)} licentie</span>
                 <span className="mx-1.5 text-slate-300">+</span>
-                <span className="text-slate-400">{sym}{fmtAmount(variablePerPeriod)} variabel</span>
+                <span className="text-slate-400">{isVariable ? '± ' : ''}{sym}{fmtAmount(variablePerPeriod)} {isVariable ? 'verbruik' : 'variabel'}</span>
                 {sub.cost_period && sub.cost_period !== 'Maandelijks' && (
                   <span className="text-slate-400"> per {sub.cost_period.toLowerCase()}</span>
                 )}
