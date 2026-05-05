@@ -137,6 +137,44 @@ export function useSettings() {
     setDepartments(departments.filter((dept) => dept.id !== id));
   };
 
+  // Generieke rename helper: hernoemt de master + cascade-update naar subscriptions
+  // (subscriptions slaat afdeling/categorie als string op, dus we moeten ze synchroniseren)
+  const renameTaxonomy = async (table, subColumn, list, setList, id, newName) => {
+    const trimmed = (newName || '').trim();
+    const item = list.find(x => x.id === id);
+    if (!trimmed || !item || item.name === trimmed) return false;
+
+    const oldName = item.name;
+    const { error } = await supabase.from(table).update({ name: trimmed }).eq('id', id);
+    if (error) {
+      console.error(`Error renaming ${table}:`, error);
+      toast.error(`Naam wijzigen mislukt: ${error.message}`);
+      return false;
+    }
+
+    // Cascade naar subscriptions die deze waarde gebruiken
+    const { error: cascadeError } = await supabase
+      .from('subscriptions')
+      .update({ [subColumn]: trimmed })
+      .eq(subColumn, oldName);
+
+    if (cascadeError) {
+      console.error('Cascade update mislukt:', cascadeError);
+      toast.error('Naam gewijzigd, maar abonnementen niet bijgewerkt.');
+    } else {
+      toast.success(`Hernoemd naar "${trimmed}".`);
+    }
+
+    setList(prev =>
+      prev.map(x => x.id === id ? { ...x, name: trimmed } : x)
+        .sort((a, b) => a.name.localeCompare(b.name, 'nl'))
+    );
+    return true;
+  };
+
+  const updateCategory   = (id, name) => renameTaxonomy('subscription_categories',  'category',   categories,  setCategories,  id, name);
+  const updateDepartment = (id, name) => renameTaxonomy('subscription_departments', 'department', departments, setDepartments, id, name);
+
   return {
     categories,
     types,
@@ -151,6 +189,8 @@ export function useSettings() {
     deleteCategory,
     deleteType,
     deleteDepartment,
+    updateCategory,
+    updateDepartment,
     refetch: fetchSettings
   };
 }

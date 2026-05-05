@@ -10,6 +10,8 @@ import {
   CheckIcon,
   UsersIcon,
   ChevronRightIcon,
+  PencilSquareIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 
 const FOREIGN_CURRENCIES = [
@@ -103,7 +105,82 @@ function ExchangeRateRow({ currency, label, value, onSave, isAdmin }) {
 // Taxonomie lijst (categorieën, types, afdelingen)
 // ============================================================
 
-function TaxonomyList({ title, info, items, onAdd, onDelete, isAdmin, placeholder, emptyText }) {
+function TaxonomyRow({ item, isAdmin, onUpdate, onDelete }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(item.name);
+
+  const startEdit = () => { setDraft(item.name); setEditing(true); };
+  const cancelEdit = () => { setDraft(item.name); setEditing(false); };
+  const commit = async () => {
+    const trimmed = draft.trim();
+    if (!trimmed || trimmed === item.name) { cancelEdit(); return; }
+    const ok = await onUpdate(item.id, trimmed);
+    if (ok) setEditing(false);
+    else cancelEdit();
+  };
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-2 py-1.5 px-1 -mx-1 border-b border-slate-100 last:border-0">
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); commit(); }
+            if (e.key === 'Escape') cancelEdit();
+          }}
+          autoFocus
+          className="flex-1 px-2.5 py-1.5 rounded-md border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+        />
+        <button
+          type="button"
+          onClick={commit}
+          className="p-1.5 rounded-md text-green-600 hover:bg-green-50 transition-colors"
+          aria-label="Opslaan"
+        >
+          <CheckIcon className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={cancelEdit}
+          className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+          aria-label="Annuleren"
+        >
+          <XMarkIcon className="h-4 w-4" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="group flex items-center justify-between py-2 px-1 -mx-1 rounded-lg border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors">
+      <span className="text-sm text-slate-700">{item.name}</span>
+      {isAdmin && (
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            type="button"
+            onClick={startEdit}
+            className="p-1 rounded-md text-slate-400 hover:text-primary hover:bg-primary/10 transition-colors"
+            aria-label={`Hernoem ${item.name}`}
+          >
+            <PencilSquareIcon className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete(item.id)}
+            className="p-1 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+            aria-label={`Verwijder ${item.name}`}
+          >
+            <TrashIcon className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TaxonomyList({ title, info, items, onAdd, onDelete, onUpdate, isAdmin, placeholder, emptyText }) {
   const [input, setInput] = useState('');
 
   const handleSubmit = async (e) => {
@@ -144,22 +221,13 @@ function TaxonomyList({ title, info, items, onAdd, onDelete, isAdmin, placeholde
         ) : (
           <div>
             {items.map((item) => (
-              <div
+              <TaxonomyRow
                 key={item.id}
-                className="group flex items-center justify-between py-2 px-1 -mx-1 rounded-lg border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors"
-              >
-                <span className="text-sm text-slate-700">{item.name}</span>
-                {isAdmin && (
-                  <button
-                    type="button"
-                    onClick={() => onDelete(item.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all"
-                    aria-label={`Verwijder ${item.name}`}
-                  >
-                    <TrashIcon className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
+                item={item}
+                isAdmin={isAdmin}
+                onUpdate={onUpdate}
+                onDelete={onDelete}
+              />
             ))}
           </div>
         )}
@@ -178,6 +246,7 @@ function SettingsPage() {
     exchangeRates, updateExchangeRate,
     addCategory, addDepartment,
     deleteCategory, deleteDepartment,
+    updateCategory, updateDepartment,
   } = useSettings();
   const { isAdmin } = useCurrentUser();
   const navigate = useNavigate();
@@ -238,6 +307,7 @@ function SettingsPage() {
           items={departments}
           onAdd={addDepartment}
           onDelete={deleteDepartment}
+          onUpdate={updateDepartment}
           isAdmin={isAdmin}
           placeholder="Nieuwe afdeling…"
           emptyText="Nog geen afdelingen toegevoegd."
@@ -255,6 +325,7 @@ function SettingsPage() {
           items={categories}
           onAdd={addCategory}
           onDelete={deleteCategory}
+          onUpdate={updateCategory}
           isAdmin={isAdmin}
           placeholder="Nieuwe categorie…"
           emptyText="Nog geen categorieën toegevoegd."
