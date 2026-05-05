@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { BILLING_PERIODS, toMonthly } from '../lib/costUtils';
-import { currencySymbol } from '../lib/format';
-import { ChevronDownIcon, PlusIcon, TrashIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
+import { currencySymbol, formatDate } from '../lib/format';
+import { ChevronDownIcon, PlusIcon, TrashIcon, InformationCircleIcon, ArrowUturnLeftIcon } from '@heroicons/react/24/outline';
 import { SubLogo } from './SubLogo';
 import Modal from './Modal';
 import { recomputeSubscriptionSnapshots } from '../lib/snapshotUtils';
@@ -144,20 +144,38 @@ function AddableSelect({ label, value, options, onChange, onAdd, error, required
 // ============================================================
 
 function AccountsManager({ accounts, onChange, defaultCost, currency, period }) {
+  const [showArchive, setShowArchive] = useState(false);
+
   const addAccount = () => {
-    onChange([...accounts, { _tempId: crypto.randomUUID(), owner_name: '', start_date: '', end_date: '', auto_renew: false, cost: '' }]);
+    onChange([...accounts, { _tempId: crypto.randomUUID(), owner_name: '', start_date: '', end_date: '', auto_renew: false, cost: '', archived_at: null }]);
   };
 
-  const updateAccount = (idx, patch) => {
-    onChange(accounts.map((a, i) => i === idx ? { ...a, ...patch } : a));
+  // Operate on accounts via stable key (id voor bestaande, _tempId voor nieuwe)
+  const keyOf = (a) => a.id ?? a._tempId;
+
+  const updateByKey = (key, patch) => {
+    onChange(accounts.map(a => keyOf(a) === key ? { ...a, ...patch } : a));
   };
 
-  const removeAccount = (idx) => {
-    onChange(accounts.filter((_, i) => i !== idx));
+  const archiveAccount = (key) => {
+    updateByKey(key, { archived_at: new Date().toISOString() });
   };
+
+  const restoreAccount = (key) => {
+    updateByKey(key, { archived_at: null });
+  };
+
+  const permanentlyDeleteAccount = (key) => {
+    if (!confirm('Account definitief verwijderen? Dit verwijdert ook de historische cashflow van deze account. Niet ongedaan te maken.')) return;
+    onChange(accounts.filter(a => keyOf(a) !== key));
+  };
+
+  // Active = niet gearchiveerd, sortable op start_date
+  const activeAccounts = accounts.filter(a => !a.archived_at);
+  const archivedAccounts = accounts.filter(a => a.archived_at);
 
   const sym = currencySymbol(currency);
-  const totalMonthly = accounts.reduce((sum, a) => {
+  const totalMonthly = activeAccounts.reduce((sum, a) => {
     const cost = a.cost !== '' && a.cost !== null && a.cost !== undefined
       ? parseFloat(a.cost) || 0
       : parseFloat(defaultCost) || 0;
@@ -168,7 +186,7 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period }) 
     <div className="rounded-lg border border-slate-200 bg-slate-50/50 overflow-hidden">
       <div className="px-3.5 py-2.5 bg-slate-100/70 flex items-center justify-between text-xs">
         <span className="font-medium text-slate-600 flex items-center gap-1.5">
-          {accounts.length} account{accounts.length !== 1 ? 's' : ''}
+          {activeAccounts.length} account{activeAccounts.length !== 1 ? 's' : ''}
           <span className="relative group">
             <InformationCircleIcon className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 cursor-help transition-colors" />
             <span className="absolute left-0 top-5 z-20 hidden group-hover:block w-80 rounded-xl bg-slate-900 text-white text-xs p-3.5 shadow-xl ring-1 ring-white/10 leading-relaxed font-normal normal-case tracking-normal">
@@ -192,7 +210,7 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period }) 
           <span className="text-slate-500">≈ {sym}{totalMonthly.toFixed(2)} totaal/mnd</span>
         )}
       </div>
-      {accounts.length === 0 ? (
+      {activeAccounts.length === 0 && archivedAccounts.length === 0 ? (
         <div className="p-6 text-center">
           <p className="text-sm text-slate-400">Nog geen accounts toegevoegd.</p>
           <button type="button" onClick={addAccount} className="btn-primary text-sm mt-3 inline-flex items-center gap-1.5">
@@ -202,84 +220,91 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period }) 
         </div>
       ) : (
         <>
-          <div className="divide-y divide-slate-200">
-            {accounts.map((account, idx) => (
-              <div
-                key={account.id ?? account._tempId ?? idx}
-                className="p-3 grid grid-cols-1 sm:grid-cols-[1fr,140px,180px,140px,auto] gap-2 items-end"
-              >
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Naam medewerker</label>
-                  <input
-                    type="text"
-                    value={account.owner_name || ''}
-                    onChange={(e) => updateAccount(idx, { owner_name: e.target.value })}
-                    placeholder="Bijv. Joris van den Hoven"
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Startdatum</label>
-                  <input
-                    type="date"
-                    value={account.start_date || ''}
-                    onChange={(e) => updateAccount(idx, { start_date: e.target.value })}
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Vervaldatum</label>
-                  <div className="flex gap-1.5">
-                    <input
-                      type="date"
-                      value={account.end_date || ''}
-                      onChange={(e) => updateAccount(idx, { end_date: e.target.value })}
-                      className={`flex-1 min-w-0 ${inputClass}`}
-                    />
+          {activeAccounts.length > 0 && (
+            <div className="divide-y divide-slate-200">
+              {activeAccounts.map((account) => {
+                const key = keyOf(account);
+                return (
+                  <div
+                    key={key}
+                    className="p-3 grid grid-cols-1 sm:grid-cols-[1fr,140px,180px,140px,auto] gap-2 items-end"
+                  >
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-1">Naam medewerker</label>
+                      <input
+                        type="text"
+                        value={account.owner_name || ''}
+                        onChange={(e) => updateByKey(key, { owner_name: e.target.value })}
+                        placeholder="Bijv. Joris van den Hoven"
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-1">Startdatum</label>
+                      <input
+                        type="date"
+                        value={account.start_date || ''}
+                        onChange={(e) => updateByKey(key, { start_date: e.target.value })}
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-1">Vervaldatum</label>
+                      <div className="flex gap-1.5">
+                        <input
+                          type="date"
+                          value={account.end_date || ''}
+                          onChange={(e) => updateByKey(key, { end_date: e.target.value })}
+                          className={`flex-1 min-w-0 ${inputClass}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => updateByKey(key, { auto_renew: !account.auto_renew })}
+                          title={account.auto_renew
+                            ? 'Auto-verlenging aan — vervaldatum schuift automatisch door'
+                            : 'Auto-verlenging uit — account stopt op vervaldatum'}
+                          className={`flex-shrink-0 h-9 w-9 inline-flex items-center justify-center rounded-md text-base font-semibold transition-all ${
+                            account.auto_renew
+                              ? 'bg-primary/15 text-primary hover:bg-primary/20'
+                              : 'bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600'
+                          }`}
+                          aria-label={account.auto_renew ? 'Auto-verlenging aan' : 'Auto-verlenging uit'}
+                        >
+                          ↻
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-1">
+                        Prijs <span className="text-slate-400 font-normal">(optioneel)</span>
+                      </label>
+                      <div className="flex">
+                        <span className="px-2.5 py-2 border border-slate-200 border-r-0 rounded-l-md bg-slate-100 text-sm text-slate-500 flex items-center">{sym}</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={account.cost ?? ''}
+                          onChange={(e) => updateByKey(key, { cost: e.target.value })}
+                          placeholder={defaultCost ? `${defaultCost}` : 'standaard'}
+                          className="block w-full px-3 py-2 rounded-r-md border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                        />
+                      </div>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => updateAccount(idx, { auto_renew: !account.auto_renew })}
-                      title={account.auto_renew
-                        ? 'Auto-verlenging aan — vervaldatum schuift automatisch door'
-                        : 'Auto-verlenging uit — account stopt op vervaldatum'}
-                      className={`flex-shrink-0 h-9 w-9 inline-flex items-center justify-center rounded-md text-base font-semibold transition-all ${
-                        account.auto_renew
-                          ? 'bg-primary/15 text-primary hover:bg-primary/20'
-                          : 'bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600'
-                      }`}
-                      aria-label={account.auto_renew ? 'Auto-verlenging aan' : 'Auto-verlenging uit'}
+                      onClick={() => archiveAccount(key)}
+                      className="h-9 w-9 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                      title="Verplaats naar archief"
+                      aria-label="Account archiveren"
                     >
-                      ↻
+                      <TrashIcon className="h-4 w-4" />
                     </button>
                   </div>
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">
-                    Prijs <span className="text-slate-400 font-normal">(optioneel)</span>
-                  </label>
-                  <div className="flex">
-                    <span className="px-2.5 py-2 border border-slate-200 border-r-0 rounded-l-md bg-slate-100 text-sm text-slate-500 flex items-center">{sym}</span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={account.cost ?? ''}
-                      onChange={(e) => updateAccount(idx, { cost: e.target.value })}
-                      placeholder={defaultCost ? `${defaultCost}` : 'standaard'}
-                      className="block w-full px-3 py-2 rounded-r-md border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-                    />
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeAccount(idx)}
-                  className="h-9 w-9 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
-                  aria-label="Account verwijderen"
-                >
-                  <TrashIcon className="h-4 w-4" />
-                </button>
-              </div>
-            ))}
-          </div>
+                );
+              })}
+            </div>
+          )}
+
           <button
             type="button"
             onClick={addAccount}
@@ -288,6 +313,56 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period }) 
             <PlusIcon className="h-4 w-4" />
             Account toevoegen
           </button>
+
+          {archivedAccounts.length > 0 && (
+            <div className="border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => setShowArchive(s => !s)}
+                className="w-full px-3.5 py-2 flex items-center justify-between text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100/60 transition-colors"
+              >
+                <span className="font-medium">Gearchiveerd ({archivedAccounts.length})</span>
+                <ChevronDownIcon className={`h-3.5 w-3.5 transition-transform ${showArchive ? '' : '-rotate-90'}`} />
+              </button>
+              {showArchive && (
+                <div className="divide-y divide-slate-200 bg-slate-50/40">
+                  {archivedAccounts.map(account => {
+                    const key = keyOf(account);
+                    return (
+                      <div key={key} className="px-3.5 py-2.5 flex items-center gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-600 truncate">{account.owner_name || 'Zonder naam'}</p>
+                          <p className="text-xs text-slate-400 tabular-nums">
+                            {account.start_date ? formatDate(account.start_date) : '?'}
+                            {' → '}
+                            {account.end_date ? formatDate(account.end_date) : '∞'}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => restoreAccount(key)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+                          title="Herstellen"
+                        >
+                          <ArrowUturnLeftIcon className="h-3.5 w-3.5" />
+                          Herstellen
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => permanentlyDeleteAccount(key)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors"
+                          title="Definitief verwijderen — incl. historische cashflow"
+                        >
+                          <TrashIcon className="h-3.5 w-3.5" />
+                          Definitief
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>
@@ -362,7 +437,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
       // Derive billing model from existing data
       let model = 'flat';
       if (subscription.is_variable_cost) model = 'variable';
-      else if (subAccounts.length > 0) model = 'per_account';
+      else if (subAccounts.some(a => !a.archived_at)) model = 'per_account';
       else if (subscription.base_cost && parseFloat(subscription.base_cost) > 0) model = 'license_plus_seats';
       else if (subscription.cost_per_seat) model = 'per_seat';
       setBillingModel(model);
@@ -375,6 +450,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
           end_date: a.end_date ? a.end_date.split('T')[0] : '',
           auto_renew: !!a.auto_renew,
           cost: a.cost ?? '',
+          archived_at: a.archived_at ?? null,
         }));
         setAccounts(formatted);
         initialAccountsRef.current = formatted;
@@ -460,6 +536,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
       end_date: a.end_date || null,
       auto_renew: !!a.auto_renew,
       cost: a.cost === '' || a.cost === null || a.cost === undefined ? null : parseFloat(a.cost),
+      archived_at: a.archived_at || null,
     }));
     if (toInsert.length > 0) {
       await supabase.from('subscription_accounts').insert(toInsert);
@@ -476,7 +553,8 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
         || orig.start_date !== a.start_date
         || orig.end_date !== a.end_date
         || !!orig.auto_renew !== !!a.auto_renew
-        || origCost !== newCost;
+        || origCost !== newCost
+        || (orig.archived_at || null) !== (a.archived_at || null);
       if (changed) {
         // eslint-disable-next-line no-await-in-loop
         await supabase.from('subscription_accounts').update({
@@ -485,6 +563,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
           end_date: a.end_date || null,
           auto_renew: !!a.auto_renew,
           cost: newCost,
+          archived_at: a.archived_at || null,
           updated_at: new Date().toISOString(),
         }).eq('id', a.id);
       }

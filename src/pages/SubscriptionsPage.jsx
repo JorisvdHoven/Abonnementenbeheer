@@ -595,6 +595,21 @@ function SubscriptionsPage() {
           <h1 className="text-2xl font-bold text-slate-900">Abonnementen</h1>
           <p className="text-sm text-slate-500 mt-1 tabular-nums">
             {activeCount} actief · €{totalMonthly.toLocaleString('nl-NL', { maximumFractionDigits: 0 })} / mnd
+            {archivedSubscriptions.length > 0 && (
+              <>
+                {' · '}
+                <a
+                  href="#archief"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    document.getElementById('archief')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }}
+                  className="text-slate-400 hover:text-slate-700 underline decoration-dotted underline-offset-2 transition-colors"
+                >
+                  {archivedSubscriptions.length} in archief
+                </a>
+              </>
+            )}
           </p>
         </div>
         <div className="flex gap-2">
@@ -691,12 +706,14 @@ function SubscriptionsPage() {
           <Section title="Opgezegd" rows={opgezegd} onView={handleView}
             isSelectable={isAdmin} selected={selected} onToggleSelect={toggleSelect} onToggleAll={toggleSelectMany} />
           {isAdmin && (
-            <ArchiveSection
-              rows={filteredArchived}
-              onView={handleView}
-              onRestore={handleRestore}
-              onPermanentDelete={handlePermanentDelete}
-            />
+            <div id="archief">
+              <ArchiveSection
+                rows={filteredArchived}
+                onView={handleView}
+                onRestore={handleRestore}
+                onPermanentDelete={handlePermanentDelete}
+              />
+            </div>
           )}
         </>
       )}
