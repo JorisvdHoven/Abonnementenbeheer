@@ -6,13 +6,17 @@ import { formatDate, formatDateLong, currencySymbol } from '../lib/format';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useLatestAuditFor } from '../hooks/useAuditLog';
 
-function DetailRow({ label, value }) {
+// ============================================================
+// Layout primitives — modern, minimaal
+// ============================================================
+
+function DetailRow({ label, value, mono = false }) {
   const empty = value === null || value === undefined || value === '';
   return (
-    <div className="flex justify-between items-start py-2 border-b border-slate-50 last:border-0">
-      <span className="text-xs text-slate-400">{label}</span>
-      <span className={`text-sm text-right ${empty ? 'text-slate-300 italic' : 'text-dark font-medium'}`}>
-        {empty ? 'Niet ingevuld' : value}
+    <div className="flex justify-between items-center py-2.5 border-b border-slate-100 last:border-0">
+      <span className="text-sm text-slate-500">{label}</span>
+      <span className={`text-sm text-right ${empty ? 'text-slate-300' : 'text-slate-900 font-medium'} ${mono ? 'tabular-nums' : ''}`}>
+        {empty ? '—' : value}
       </span>
     </div>
   );
@@ -20,12 +24,73 @@ function DetailRow({ label, value }) {
 
 function Section({ title, children }) {
   return (
-    <div className="bg-slate-50 rounded-xl p-4 space-y-0">
-      <p className="text-xs font-bold text-primary uppercase tracking-widest mb-2">{title}</p>
-      {children}
+    <section>
+      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">{title}</h3>
+      <div>{children}</div>
+    </section>
+  );
+}
+
+// Status met colored dot + label — Linear-stijl
+function StatusIndicator({ status }) {
+  const dots = {
+    actief:   { color: 'bg-green-500', label: 'Actief' },
+    verlopen: { color: 'bg-red-500',   label: 'Verlopen' },
+    opgezegd: { color: 'bg-slate-400', label: 'Opgezegd' },
+  };
+  const info = dots[status] ?? { color: 'bg-slate-300', label: status ?? '—' };
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
+      <span className={`relative flex w-2 h-2`}>
+        {status === 'actief' && <span className={`absolute inline-flex h-full w-full rounded-full ${info.color} opacity-50 animate-ping`} />}
+        <span className={`relative inline-flex w-2 h-2 rounded-full ${info.color}`} />
+      </span>
+      {info.label}
+    </span>
+  );
+}
+
+// Account row binnen de Accounts sectie
+function AccountRow({ acc, parentCost, currency }) {
+  const today = new Date();
+  const start = acc.start_date ? new Date(acc.start_date) : null;
+  const end = acc.end_date ? new Date(acc.end_date) : null;
+  const isActive = (!start || start <= today) && (!end || end >= today);
+  const isFuture = start && start > today;
+  const stateLabel = isActive ? 'Actief' : isFuture ? 'Toekomstig' : 'Beëindigd';
+  const stateColor = isActive ? 'bg-green-500' : isFuture ? 'bg-blue-500' : 'bg-slate-400';
+
+  const accountCost = acc.cost !== null && acc.cost !== undefined && acc.cost !== ''
+    ? parseFloat(acc.cost)
+    : null;
+  const isCustomPrice = accountCost !== null && accountCost !== parseFloat(parentCost);
+
+  return (
+    <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 last:border-0">
+      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${stateColor}`} />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-slate-900 truncate">{acc.owner_name || 'Zonder naam'}</p>
+        <p className="text-xs text-slate-400 mt-0.5 tabular-nums">
+          {acc.start_date ? formatDate(acc.start_date) : '?'}
+          {' → '}
+          {acc.end_date ? formatDate(acc.end_date) : '∞'}
+        </p>
+      </div>
+      <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
+        {isCustomPrice && (
+          <span className="text-sm font-medium text-slate-700 tabular-nums">
+            {currencySymbol(currency)}{accountCost.toFixed(2)}
+          </span>
+        )}
+        <span className="text-[11px] uppercase tracking-wide font-medium text-slate-400">{stateLabel}</span>
+      </div>
     </div>
   );
 }
+
+// ============================================================
+// Hoofd-component
+// ============================================================
 
 export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
   const { isAdmin } = useCurrentUser();
@@ -69,152 +134,147 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
     ? toMonthly(perPeriodTotal, sub.cost_period)
     : null;
 
-  const statusColors = {
-    actief:   'bg-green-100 text-green-700',
-    verlopen: 'bg-red-100 text-red-600',
-    opgezegd: 'bg-slate-100 text-slate-500',
-  };
+  const sym = currencySymbol(sub.currency);
+  const fmtAmount = (v) => v.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative z-50 w-full max-w-lg bg-white shadow-2xl flex flex-col h-full">
+      <div className="absolute inset-0 bg-slate-950/30 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-50 w-full max-w-lg bg-white shadow-2xl flex flex-col h-full sm:rounded-l-2xl overflow-hidden">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
-          <div className="flex items-center gap-4">
+        <div className="px-6 pt-5 pb-4 border-b border-slate-100">
+          <div className="flex items-start justify-between mb-3">
             <SubLogo vendor={sub.vendor} name={sub.name} size="lg" />
-            <div>
-              <h2 className="text-xl font-bold text-dark">{sub.name}</h2>
-              {sub.vendor && <p className="text-sm text-slate-400 mt-0.5">{sub.vendor}</p>}
-            </div>
+            <button
+              onClick={onClose}
+              className="p-1.5 -m-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
+              aria-label="Sluiten"
+            >
+              <XMarkIcon className="h-5 w-5" />
+            </button>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
-            <XMarkIcon className="h-5 w-5" />
-          </button>
+          <h2 className="text-xl font-bold text-slate-900 leading-tight">{sub.name}</h2>
+          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+            {sub.vendor && (
+              <>
+                <span className="text-sm text-slate-400">{sub.vendor}</span>
+                <span className="text-slate-300">·</span>
+              </>
+            )}
+            <StatusIndicator status={sub.status} />
+            {hasAccounts && (
+              <>
+                <span className="text-slate-300">·</span>
+                <span className="text-xs font-medium text-slate-600 tabular-nums">
+                  {activeAccountCount} actieve account{activeAccountCount !== 1 ? 's' : ''}
+                </span>
+              </>
+            )}
+          </div>
         </div>
 
-        {/* Status */}
-        <div className="px-6 py-3 border-b border-slate-100">
-          <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-full ${statusColors[sub.status] ?? 'bg-slate-100 text-slate-500'}`}>
-            {sub.status ?? '-'}
-          </span>
-        </div>
+        {/* Hero KPI */}
+        {monthly !== null && (
+          <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-b from-slate-50/50 to-white">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Maandkosten</p>
+            <div className="flex items-baseline gap-2 mt-1">
+              <p className="text-3xl font-bold text-slate-900 tabular-nums leading-none">
+                {sym}{fmtAmount(monthly)}
+              </p>
+              <span className="text-sm text-slate-400">/ mnd</span>
+            </div>
+            <p className="text-xs text-slate-500 mt-2 tabular-nums">
+              {sym}{fmtAmount(monthly * 12)} per jaar
+              {sub.cost_period && sub.cost_period !== 'Maandelijks' && (
+                <> · {sym}{fmtAmount(perPeriodTotal)} per {sub.cost_period.toLowerCase()}</>
+              )}
+            </p>
+          </div>
+        )}
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-3">
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+
           <Section title="Abonnement">
             {!hasAccounts && <DetailRow label="Account van" value={sub.account_owner} />}
             <DetailRow label="Categorie" value={sub.category} />
             <DetailRow label="Type" value={sub.type} />
             <DetailRow label="Afdeling" value={sub.department} />
-            {hasAccounts
-              ? <DetailRow label="Actieve accounts" value={`${activeAccountCount} van ${sub.accounts.length}`} />
-              : <DetailRow label="Seats" value={sub.seats} />
-            }
+            {!hasAccounts && <DetailRow label="Seats" value={sub.seats} mono />}
           </Section>
 
           {hasAccounts && (
-            <Section title="Accounts">
-              <div className="space-y-1">
-                {sub.accounts.map(acc => {
-                  const today = new Date();
-                  const start = acc.start_date ? new Date(acc.start_date) : null;
-                  const end = acc.end_date ? new Date(acc.end_date) : null;
-                  const isActive = (!start || start <= today) && (!end || end >= today);
-                  const isFuture = start && start > today;
-                  const stateLabel = isActive ? 'Actief' : isFuture ? 'Toekomstig' : 'Beëindigd';
-                  const stateColor = isActive ? 'bg-green-100 text-green-700' : isFuture ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500';
-                  const accountCost = acc.cost !== null && acc.cost !== undefined && acc.cost !== ''
-                    ? parseFloat(acc.cost)
-                    : null;
-                  const isCustomPrice = accountCost !== null && accountCost !== parseFloat(sub.cost);
-                  return (
-                    <div key={acc.id} className="flex items-center justify-between py-1.5 border-b border-slate-100 last:border-0">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-dark truncate">{acc.owner_name || '— zonder naam —'}</p>
-                        <p className="text-xs text-slate-400">
-                          {acc.start_date ? formatDate(acc.start_date) : '?'}
-                          {' → '}
-                          {acc.end_date ? formatDate(acc.end_date) : '∞'}
-                          {isCustomPrice && (
-                            <span className="ml-2 text-slate-500">· {currencySymbol(sub.currency)}{accountCost.toFixed(2)}</span>
-                          )}
-                        </p>
-                      </div>
-                      <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${stateColor}`}>{stateLabel}</span>
-                    </div>
-                  );
-                })}
+            <Section title={`Accounts · ${sub.accounts.length}`}>
+              <div>
+                {sub.accounts.map(acc => (
+                  <AccountRow
+                    key={acc.id}
+                    acc={acc}
+                    parentCost={sub.cost}
+                    currency={sub.currency}
+                  />
+                ))}
               </div>
             </Section>
           )}
 
-          <Section title="Kosten">
-            {hasAccounts ? (
-              <DetailRow
-                label="Totaal per periode"
-                value={`${currencySymbol(sub.currency)}${perPeriodTotal.toFixed(2)}${sub.cost_period ? ` (${sub.cost_period})` : ''} · ${activeAccountCount} actieve account${activeAccountCount !== 1 ? 's' : ''}`}
-              />
-            ) : (
-              <DetailRow
-                label="Kosten"
-                value={`${currencySymbol(sub.currency)}${sub.cost}${sub.cost_period ? ` (${sub.cost_period})` : ''}${sub.cost_per_seat ? ` × ${sub.seats || 1} seats` : ''}`}
-              />
-            )}
-            {monthly !== null && sub.cost_period !== 'Maandelijks' && (
-              <DetailRow label="Per maand" value={`${currencySymbol(sub.currency)}${monthly.toFixed(2)}`} />
-            )}
-            {monthly !== null && (
-              <DetailRow label="Per jaar" value={`${currencySymbol(sub.currency)}${(monthly * 12).toFixed(2)}`} />
-            )}
-          </Section>
-
           <Section title="Datums">
-            <DetailRow label="Startdatum" value={sub.start_date ? formatDate(sub.start_date) : null} />
-            <DetailRow label="Einddatum" value={sub.end_date ? formatDate(sub.end_date) : null} />
-            <DetailRow label="Verlengingsdatum" value={sub.renewal_date ? formatDate(sub.renewal_date) : null} />
+            <DetailRow label="Startdatum" value={sub.start_date ? formatDate(sub.start_date) : null} mono />
+            <DetailRow label="Einddatum" value={sub.end_date ? formatDate(sub.end_date) : null} mono />
+            <DetailRow label="Verlengingsdatum" value={sub.renewal_date ? formatDate(sub.renewal_date) : null} mono />
             <DetailRow label="Auto-verlenging" value={sub.auto_renew === true ? 'Ja' : sub.auto_renew === false ? 'Nee' : null} />
           </Section>
 
           <Section title="Contact">
             <DetailRow label="Naam" value={sub.contact_name} />
-            <DetailRow label="Telefoon" value={sub.contact_phone} />
+            <DetailRow label="Telefoon" value={sub.contact_phone} mono />
             <DetailRow label="E-mail" value={sub.contact_email} />
           </Section>
 
-          <Section title="Notities">
-            {sub.notes
-              ? <p className="text-sm text-slate-600 italic">{sub.notes}</p>
-              : <p className="text-sm text-slate-300 italic">Niet ingevuld</p>
-            }
-          </Section>
+          {sub.notes && (
+            <Section title="Notities">
+              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{sub.notes}</p>
+            </Section>
+          )}
 
-          <Section title="Document">
-            {sub.document_content
-              ? <a href={sub.document_content} download={sub.document_name || `${sub.name}-document`} className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
-                  <DocumentArrowDownIcon className="h-4 w-4" />
-                  {sub.document_name || 'Download'}
-                </a>
-              : <p className="text-sm text-slate-300 italic">Niet ingevuld</p>
-            }
-          </Section>
+          {sub.document_content && (
+            <Section title="Document">
+              <a
+                href={sub.document_content}
+                download={sub.document_name || `${sub.name}-document`}
+                className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+              >
+                <DocumentArrowDownIcon className="h-4 w-4" />
+                {sub.document_name || 'Download'}
+              </a>
+            </Section>
+          )}
 
           {latestAudit && (
-            <p className="text-xs text-slate-400 text-center pt-2">
-              Laatst {latestAudit.action === 'insert' ? 'aangemaakt' : 'gewijzigd'} door <span className="font-medium text-slate-500">{latestAudit.user_email || 'onbekend'}</span> op {formatDateLong(latestAudit.created_at)}
+            <p className="text-xs text-slate-400 pt-3 border-t border-slate-100 tabular-nums">
+              Laatst {latestAudit.action === 'insert' ? 'aangemaakt' : 'gewijzigd'} door{' '}
+              <span className="font-medium text-slate-600">{latestAudit.user_email || 'onbekend'}</span>
+              {' '}op {formatDateLong(latestAudit.created_at)}
             </p>
           )}
         </div>
 
         {/* Footer */}
         {isAdmin && (
-          <div className="px-6 py-4 border-t border-slate-100 flex gap-3">
-            <button onClick={() => onEdit(sub)} className="flex-1 btn-primary flex items-center justify-center gap-2">
+          <div className="px-6 py-4 border-t border-slate-100 flex gap-3 bg-white">
+            <button
+              onClick={() => onEdit(sub)}
+              className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:brightness-110 transition-all"
+            >
               <PencilSquareIcon className="h-4 w-4" />
               Bewerken
             </button>
-            <button onClick={() => onDelete(sub.id)} className="flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium text-red-500 hover:bg-red-50 transition-colors">
+            <button
+              onClick={() => onDelete(sub.id)}
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+              aria-label="Verwijderen"
+            >
               <TrashIcon className="h-4 w-4" />
               Verwijder
             </button>
