@@ -355,9 +355,12 @@ function Section({ title, rows, onView, showUrgency, accent, isSelectable, selec
 }
 
 // Sectie voor gearchiveerde abonnementen — Restore + Definitief verwijderen acties
-function ArchiveSection({ rows, onView, onRestore, onPermanentDelete }) {
+function ArchiveSection({ rows, totalCount, onView, onRestore, onPermanentDelete }) {
   const [open, setOpen] = useState(false); // dichtgeklapt by default
-  if (rows.length === 0) return null;
+  // Geen archief totaal → niets renderen. Wel archief, maar gefilterd weg → toon empty state.
+  if (totalCount === 0) return null;
+
+  const isFilteredOut = rows.length === 0 && totalCount > 0;
 
   // Sorteer op archived_at desc (recentste bovenaan)
   const sorted = [...rows].sort((a, b) => new Date(b.archived_at) - new Date(a.archived_at));
@@ -370,12 +373,21 @@ function ArchiveSection({ rows, onView, onRestore, onPermanentDelete }) {
       >
         <div className="flex items-center gap-2.5">
           <span className="font-semibold text-slate-500">Archief</span>
-          <span className="text-xs font-semibold px-2 py-0.5 rounded-full tabular-nums bg-slate-100 text-slate-600">{rows.length}</span>
+          <span className="text-xs font-semibold px-2 py-0.5 rounded-full tabular-nums bg-slate-100 text-slate-600">
+            {isFilteredOut ? `0 van ${totalCount}` : rows.length}
+          </span>
         </div>
         <ChevronDownIcon className={`h-4 w-4 text-slate-400 group-hover:text-slate-600 transition-all ${open ? '' : '-rotate-90'}`} />
       </button>
       {open && (
         <div className="border-t border-slate-100">
+          {isFilteredOut && (
+            <div className="px-5 py-6 text-center text-sm text-slate-400">
+              Geen gearchiveerde abonnementen voor deze filters.
+              <br />
+              <span className="text-xs">Pas de filters aan om alle {totalCount} gearchiveerde items te zien.</span>
+            </div>
+          )}
           {sorted.map(sub => (
             <div
               key={sub.id}
@@ -710,6 +722,7 @@ function SubscriptionsPage() {
             <div id="archief">
               <ArchiveSection
                 rows={filteredArchived}
+                totalCount={archivedSubscriptions.length}
                 onView={handleView}
                 onRestore={handleRestore}
                 onPermanentDelete={handlePermanentDelete}

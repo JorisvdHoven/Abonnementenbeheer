@@ -6,6 +6,7 @@ import { ChevronDownIcon, PlusIcon, TrashIcon, InformationCircleIcon, ArrowUturn
 import { SubLogo } from './SubLogo';
 import Modal from './Modal';
 import { recomputeSubscriptionSnapshots } from '../lib/snapshotUtils';
+import { toast } from '../lib/toast';
 
 // ============================================================
 // Layout primitives — modern, minimaal
@@ -166,7 +167,7 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period }) 
   };
 
   const permanentlyDeleteAccount = (key) => {
-    if (!confirm('Account definitief verwijderen? Dit verwijdert ook de historische cashflow van deze account. Niet ongedaan te maken.')) return;
+    if (!confirm('Account uit lijst verwijderen?\n\nDe verwijdering wordt pas definitief zodra je het abonnement opslaat. Tot die tijd kun je nog annuleren.\n\nNa opslaan wordt ook de historische cashflow van dit account verwijderd.')) return;
     onChange(accounts.filter(a => keyOf(a) !== key));
   };
 
@@ -222,13 +223,28 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period }) 
         <>
           {activeAccounts.length > 0 && (
             <div className="divide-y divide-slate-200">
-              {activeAccounts.map((account) => {
+              {activeAccounts.map((account, idx) => {
                 const key = keyOf(account);
                 return (
                   <div
                     key={key}
-                    className="p-3 grid grid-cols-1 sm:grid-cols-[1fr,140px,180px,140px,auto] gap-2 items-end"
+                    className="relative p-3 grid grid-cols-1 sm:grid-cols-[1fr,140px,180px,140px,auto] gap-2 items-end"
                   >
+                    {/* Mobile-only header: account-nummer + archive-knop */}
+                    <div className="sm:hidden flex items-center justify-between -mb-1">
+                      <span className="text-[11px] uppercase tracking-wide font-semibold text-slate-400">
+                        Account {idx + 1}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => archiveAccount(key)}
+                        className="h-8 w-8 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                        title="Verplaats naar archief"
+                        aria-label="Account archiveren"
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                      </button>
+                    </div>
                     <div>
                       <label className="block text-xs text-slate-500 mb-1">Naam medewerker</label>
                       <input
@@ -290,10 +306,11 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period }) 
                         />
                       </div>
                     </div>
+                    {/* Desktop-only archive-knop in laatste grid-kolom */}
                     <button
                       type="button"
                       onClick={() => archiveAccount(key)}
-                      className="h-9 w-9 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                      className="hidden sm:flex h-9 w-9 items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
                       title="Verplaats naar archief"
                       aria-label="Account archiveren"
                     >
@@ -525,7 +542,8 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
     // Delete: ids in initial maar niet in current
     const toDelete = [...initialIds].filter(id => !currentIds.has(id));
     if (toDelete.length > 0) {
-      await supabase.from('subscription_accounts').delete().in('id', toDelete);
+      const { error } = await supabase.from('subscription_accounts').delete().in('id', toDelete);
+      if (error) throw new Error(`Account verwijderen mislukt: ${error.message}`);
     }
 
     // Insert: items zonder id
@@ -539,7 +557,8 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
       archived_at: a.archived_at || null,
     }));
     if (toInsert.length > 0) {
-      await supabase.from('subscription_accounts').insert(toInsert);
+      const { error } = await supabase.from('subscription_accounts').insert(toInsert);
+      if (error) throw new Error(`Account toevoegen mislukt: ${error.message}`);
     }
 
     // Update: items met id, vergelijk met initial
@@ -557,7 +576,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
         || (orig.archived_at || null) !== (a.archived_at || null);
       if (changed) {
         // eslint-disable-next-line no-await-in-loop
-        await supabase.from('subscription_accounts').update({
+        const { error } = await supabase.from('subscription_accounts').update({
           owner_name: a.owner_name || null,
           start_date: a.start_date || null,
           end_date: a.end_date || null,
@@ -566,6 +585,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
           archived_at: a.archived_at || null,
           updated_at: new Date().toISOString(),
         }).eq('id', a.id);
+        if (error) throw new Error(`Account bijwerken mislukt: ${error.message}`);
       }
     }
   };
@@ -609,20 +629,28 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
 
     const savedSub = result?.data ?? subscription;
     if (savedSub?.id) {
-      let accountsChanged = false;
-      if (isPerAccount) {
-        await persistAccounts(savedSub.id);
-        accountsChanged = true;
-      } else if (initialAccountsRef.current.length > 0) {
-        // Model gewijzigd weg van per-account → alle accounts verwijderen
-        await supabase.from('subscription_accounts').delete().eq('subscription_id', savedSub.id);
-        accountsChanged = true;
-      }
+      try {
+        let accountsChanged = false;
+        if (isPerAccount) {
+          await persistAccounts(savedSub.id);
+          accountsChanged = true;
+        } else if (initialAccountsRef.current.length > 0) {
+          // Model gewijzigd weg van per-account → alle accounts verwijderen
+          const { error } = await supabase.from('subscription_accounts').delete().eq('subscription_id', savedSub.id);
+          if (error) throw new Error(`Accounts opschonen mislukt: ${error.message}`);
+          accountsChanged = true;
+        }
 
-      // Snapshot opnieuw opbouwen met de actuele accounts staat — anders staan
-      // historische maanden + cashflow grafiek nog op de oude waardes.
-      if (accountsChanged) {
-        await recomputeSubscriptionSnapshots(supabase, savedSub.id);
+        // Snapshot opnieuw opbouwen met de actuele accounts staat — anders staan
+        // historische maanden + cashflow grafiek nog op de oude waardes.
+        if (accountsChanged) {
+          await recomputeSubscriptionSnapshots(supabase, savedSub.id);
+        }
+      } catch (err) {
+        // Het abonnement zelf is wel opgeslagen, maar accounts/snapshots zijn
+        // mogelijk inconsistent. Geef gebruiker duidelijke feedback ipv stille fail.
+        console.error('Account/snapshot sync mislukt:', err);
+        toast.error(`Abonnement opgeslagen, maar accounts niet volledig gesynct: ${err.message}. Open het abonnement opnieuw en controleer.`);
       }
     }
   };
