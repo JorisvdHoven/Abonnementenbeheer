@@ -7,21 +7,30 @@ export function useSettings() {
   const [types, setTypes] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Rates staan in DB (exchange_rates tabel). Snel-fallback uit localStorage
+  // tijdens initial render, daarna sync vanuit DB in fetchSettings().
   const [exchangeRates, setExchangeRates] = useState(() => {
-    // Backwards compat: lees oude 'usd_eur_rate' key als die bestaat
     try {
       const stored = localStorage.getItem('exchange_rates');
       if (stored) return JSON.parse(stored);
     } catch (e) {
-      console.error('Could not parse exchange_rates', e);
+      console.error('Could not parse exchange_rates cache', e);
     }
-    const legacyUsd = parseFloat(localStorage.getItem('usd_eur_rate') || '0.93');
-    return { USD: legacyUsd, GBP: 1.15, CHF: 1.05 };
+    return { USD: 0.93, GBP: 1.15, CHF: 1.05 };
   });
 
-  const updateExchangeRate = (currency, rate) => {
+  const updateExchangeRate = async (currency, rate) => {
     const parsed = parseFloat(rate);
     if (isNaN(parsed) || parsed <= 0) return;
+    const { error } = await supabase.rpc('upsert_exchange_rate', {
+      p_currency: currency,
+      p_rate: parsed,
+    });
+    if (error) {
+      console.error('Error updating exchange rate:', error);
+      toast.error(`Wisselkoers bijwerken mislukt: ${error.message}`);
+      return;
+    }
     const next = { ...exchangeRates, [currency]: parsed };
     localStorage.setItem('exchange_rates', JSON.stringify(next));
     setExchangeRates(next);
@@ -40,12 +49,21 @@ export function useSettings() {
     const [
       { data: categoriesData, error: categoriesError },
       { data: typesData, error: typesError },
-      { data: departmentsData, error: departmentsError }
+      { data: departmentsData, error: departmentsError },
+      { data: ratesData, error: ratesError }
     ] = await Promise.all([
       supabase.from('subscription_categories').select('*').order('name', { ascending: true }),
       supabase.from('subscription_types').select('*').order('name', { ascending: true }),
       supabase.from('subscription_departments').select('*').order('name', { ascending: true }),
+      supabase.from('exchange_rates').select('currency, rate'),
     ]);
+
+    // Sync DB rates → state + localStorage cache. Geen toast bij fail (silent fallback).
+    if (!ratesError && ratesData?.length) {
+      const ratesMap = Object.fromEntries(ratesData.map(r => [r.currency, parseFloat(r.rate)]));
+      setExchangeRates(ratesMap);
+      localStorage.setItem('exchange_rates', JSON.stringify(ratesMap));
+    }
 
     if (categoriesError) {
       console.error('Error fetching categories:', categoriesError);
@@ -137,33 +155,26 @@ export function useSettings() {
     setDepartments(departments.filter((dept) => dept.id !== id));
   };
 
-  // Generieke rename helper: hernoemt de master + cascade-update naar subscriptions
-  // (subscriptions slaat afdeling/categorie als string op, dus we moeten ze synchroniseren)
-  const renameTaxonomy = async (table, subColumn, list, setList, id, newName) => {
+  // Generieke rename helper via Postgres RPC — atomair binnen één transactie.
+  // Master + cascade naar subscriptions slagen of falen samen, geen out-of-sync staat.
+  const renameTaxonomy = async (rpcName, list, setList, id, newName) => {
     const trimmed = (newName || '').trim();
     const item = list.find(x => x.id === id);
     if (!trimmed || !item || item.name === trimmed) return false;
 
-    const oldName = item.name;
-    const { error } = await supabase.from(table).update({ name: trimmed }).eq('id', id);
+    const { data, error } = await supabase.rpc(rpcName, { p_id: id, p_new_name: trimmed });
     if (error) {
-      console.error(`Error renaming ${table}:`, error);
+      console.error(`RPC ${rpcName} mislukt:`, error);
       toast.error(`Naam wijzigen mislukt: ${error.message}`);
       return false;
     }
 
-    // Cascade naar subscriptions die deze waarde gebruiken
-    const { error: cascadeError } = await supabase
-      .from('subscriptions')
-      .update({ [subColumn]: trimmed })
-      .eq(subColumn, oldName);
-
-    if (cascadeError) {
-      console.error('Cascade update mislukt:', cascadeError);
-      toast.error('Naam gewijzigd, maar abonnementen niet bijgewerkt.');
-    } else {
-      toast.success(`Hernoemd naar "${trimmed}".`);
-    }
+    const affected = data?.[0]?.affected_subs ?? 0;
+    toast.success(
+      affected > 0
+        ? `Hernoemd naar "${trimmed}" — ${affected} abonnement${affected !== 1 ? 'en' : ''} bijgewerkt.`
+        : `Hernoemd naar "${trimmed}".`
+    );
 
     setList(prev =>
       prev.map(x => x.id === id ? { ...x, name: trimmed } : x)
@@ -172,8 +183,8 @@ export function useSettings() {
     return true;
   };
 
-  const updateCategory   = (id, name) => renameTaxonomy('subscription_categories',  'category',   categories,  setCategories,  id, name);
-  const updateDepartment = (id, name) => renameTaxonomy('subscription_departments', 'department', departments, setDepartments, id, name);
+  const updateCategory   = (id, name) => renameTaxonomy('rename_subscription_category',   categories,  setCategories,  id, name);
+  const updateDepartment = (id, name) => renameTaxonomy('rename_subscription_department', departments, setDepartments, id, name);
 
   return {
     categories,

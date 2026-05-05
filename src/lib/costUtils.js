@@ -55,12 +55,12 @@ function activeAccountsInMonth(accounts, year, month) {
   return accounts.filter(a => isAccountActiveInRange(a, firstDay, lastDay));
 }
 
-// Aantal accounts dat NU actief is (UI badge / lijst-count).
+// Filter: welke accounts zijn NU actief (UI badges, modal preview, lijst).
 // Strikter dan activeAccountsInMonth: zodra archived_at gezet is, telt het account
 // niet meer mee — ook al valt archived_at binnen de huidige maand. (Historische
 // kosten blijven wel in snapshots staan via toEurMonthlyFor / activeAccountsInMonth.)
-export function countActiveAccountsNow(accounts) {
-  if (!accounts?.length) return 0;
+export function activeAccountsNow(accounts) {
+  if (!accounts?.length) return [];
   const now = new Date();
   const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
   return accounts.filter(a => {
@@ -70,7 +70,12 @@ export function countActiveAccountsNow(accounts) {
     const end = a.end_date ? new Date(a.end_date) : null;
     if (end && end < now && !a.auto_renew) return false;
     return true;
-  }).length;
+  });
+}
+
+// Aantal accounts dat NU actief is — gebruikt door UI badges/counts.
+export function countActiveAccountsNow(accounts) {
+  return activeAccountsNow(accounts).length;
 }
 
 // Effectieve kosten van een account: eigen cost als die er is, anders parent.cost

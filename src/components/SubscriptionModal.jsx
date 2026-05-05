@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { BILLING_PERIODS, toMonthly } from '../lib/costUtils';
+import { BILLING_PERIODS, toMonthly, activeAccountsNow } from '../lib/costUtils';
 import { currencySymbol, formatDate } from '../lib/format';
 import { ChevronDownIcon, PlusIcon, TrashIcon, InformationCircleIcon, ArrowUturnLeftIcon } from '@heroicons/react/24/outline';
 import { SubLogo } from './SubLogo';
@@ -661,14 +661,10 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
     let variablePerPeriod = 0;
 
     if (isPerAccount) {
-      const today = new Date();
-      const activeAccounts = accounts.filter(a => {
-        const start = a.start_date ? new Date(a.start_date) : null;
-        const end = a.end_date ? new Date(a.end_date) : null;
-        if (start && start > today) return false;
-        if (end && end < today && !a.auto_renew) return false;
-        return true;
-      });
+      // Gebruik dezelfde 'NU actief' definitie als de rest van de app
+      // (countActiveAccountsNow, DetailPanel) — zodat preview matcht met
+      // wat er in de lijst getoond wordt. Filtert ook archived_at uit.
+      const activeAccounts = activeAccountsNow(accounts);
       variablePerPeriod = activeAccounts.reduce((sum, a) => {
         const c = a.cost !== '' && a.cost !== null && a.cost !== undefined
           ? parseFloat(a.cost) || 0

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { XMarkIcon, PencilSquareIcon, TrashIcon, DocumentArrowDownIcon } from '@heroicons/react/24/outline';
 import { SubLogo } from './SubLogo';
-import { toMonthly, countActiveAccountsNow, getBillingModel, BILLING_MODEL_LABELS } from '../lib/costUtils';
+import { toMonthly, countActiveAccountsNow, activeAccountsNow, getBillingModel, BILLING_MODEL_LABELS } from '../lib/costUtils';
 import { formatDate, formatDateLong, currencySymbol } from '../lib/format';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useLatestAuditFor } from '../hooks/useAuditLog';
@@ -126,17 +126,11 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
   const isVariable = !!sub.is_variable_cost;
 
   // Variabel deel per periode (per-account of per-seat)
+  // Gebruik gedeelde activeAccountsNow helper zodat preview, lijst en
+  // detail dezelfde definitie van 'actief' hanteren.
   let variablePerPeriod = parseFloat(sub.cost) || 0;
   if (hasAccounts) {
-    const today = new Date();
-    variablePerPeriod = liveAccounts
-      .filter(a => {
-        const start = a.start_date ? new Date(a.start_date) : null;
-        const end = a.end_date ? new Date(a.end_date) : null;
-        if (start && start > today) return false;
-        if (end && end < today && !a.auto_renew) return false;
-        return true;
-      })
+    variablePerPeriod = activeAccountsNow(liveAccounts)
       .reduce((sum, a) => {
         const c = a.cost !== null && a.cost !== undefined && a.cost !== ''
           ? parseFloat(a.cost) || 0

@@ -24,9 +24,9 @@ function effectiveAccountCost(account, parentCost) {
 }
 
 // Backfill een net toegevoegd/aangepast abonnement in de org-wide monthly_snapshots
-// voor alle maanden van start_date tot en met huidige maand. Account-aware:
-// als het abonnement accounts heeft, wordt monthly_equivalent per maand
-// berekend op basis van actieve accounts in die maand.
+// voor alle maanden van start_date tot en met huidige maand. Account-aware en
+// FX-aware: bedragen worden in EUR opgeslagen, fx_rate per detail bewaard zodat
+// historisch herleidbaar is welke koers gebruikt is.
 export async function backfillSubscriptionSnapshots(supabase, sub) {
   if (!sub.start_date || !sub.cost_period || sub.cost_period === 'Eenmalig') return;
 
@@ -45,11 +45,25 @@ export async function backfillSubscriptionSnapshots(supabase, sub) {
   }
   const hasAccounts = accounts.length > 0;
 
+  // FX rate uit DB ophalen — geen historische data beschikbaar, dus we gebruiken
+  // de huidige rate voor alle backfilled maanden. Dat wordt expliciet bewaard
+  // in details.fx_rate zodat duidelijk is welke koers is toegepast.
+  const currency = sub.currency || 'EUR';
+  let fxRate = 1.0;
+  if (currency !== 'EUR') {
+    const { data: rateRow } = await supabase
+      .from('exchange_rates')
+      .select('rate')
+      .eq('currency', currency)
+      .maybeSingle();
+    fxRate = rateRow?.rate ? parseFloat(rateRow.rate) : 1.0;
+  }
+
   const factor = BILLING_FACTORS[sub.cost_period] ?? 1;
   const parentCost = parseFloat(sub.cost) || 0;
   const baseCost = parseFloat(sub.base_cost) || 0;
 
-  const computeMonthly = (year, month) => {
+  const computeMonthlyNative = (year, month) => {
     let variable;
     if (hasAccounts) {
       const firstDay = new Date(year, month, 1);
@@ -73,7 +87,8 @@ export async function backfillSubscriptionSnapshots(supabase, sub) {
     const mEnd = y === currentYear ? currentMonth : 11;
 
     for (let m = mStart; m <= mEnd; m++) {
-      const monthlyEquivalent = computeMonthly(y, m);
+      const monthlyNative = computeMonthlyNative(y, m);
+      const monthlyEur = monthlyNative * fxRate;
 
       const subDetail = {
         id: sub.id,
@@ -82,10 +97,14 @@ export async function backfillSubscriptionSnapshots(supabase, sub) {
         department: sub.department || null,
         cost: sub.cost,
         base_cost: sub.base_cost ?? null,
-        currency: sub.currency || 'EUR',
+        currency,
         cost_period: sub.cost_period,
         is_variable_cost: sub.is_variable_cost ?? false,
-        monthly_equivalent: monthlyEquivalent,
+        // monthly_equivalent staat nu in EUR (was native, breaking change voor
+        // foreign-currency subs). Bewaar native + fx_rate erbij voor herleidbaarheid.
+        monthly_equivalent: monthlyEur,
+        monthly_equivalent_native: monthlyNative,
+        fx_rate: fxRate,
       };
 
       // eslint-disable-next-line no-await-in-loop
@@ -100,7 +119,7 @@ export async function backfillSubscriptionSnapshots(supabase, sub) {
         const details = existing.details || [];
         const filtered = details.filter(d => d.id !== sub.id);
         // Voeg sub alleen toe als er kosten zijn (anders geen rij in dat maand)
-        const newDetails = monthlyEquivalent > 0 ? [...filtered, subDetail] : filtered;
+        const newDetails = monthlyEur > 0 ? [...filtered, subDetail] : filtered;
         const newTotal = newDetails.reduce((sum, d) => sum + (d.monthly_equivalent || 0), 0);
 
         // eslint-disable-next-line no-await-in-loop
@@ -108,12 +127,12 @@ export async function backfillSubscriptionSnapshots(supabase, sub) {
           { year: y, month: m, total_cost: newTotal, details: newDetails },
           { onConflict: 'year,month' }
         );
-      } else if (monthlyEquivalent > 0) {
+      } else if (monthlyEur > 0) {
         // eslint-disable-next-line no-await-in-loop
         await supabase.from('monthly_snapshots').insert({
           year: y,
           month: m,
-          total_cost: monthlyEquivalent,
+          total_cost: monthlyEur,
           details: [subDetail],
         });
       }
