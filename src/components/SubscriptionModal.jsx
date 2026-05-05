@@ -145,7 +145,7 @@ function AddableSelect({ label, value, options, onChange, onAdd, error, required
 
 function AccountsManager({ accounts, onChange, defaultCost, currency, period }) {
   const addAccount = () => {
-    onChange([...accounts, { _tempId: crypto.randomUUID(), owner_name: '', start_date: '', end_date: '', cost: '' }]);
+    onChange([...accounts, { _tempId: crypto.randomUUID(), owner_name: '', start_date: '', end_date: '', auto_renew: false, cost: '' }]);
   };
 
   const updateAccount = (idx, patch) => {
@@ -171,19 +171,19 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period }) 
           {accounts.length} account{accounts.length !== 1 ? 's' : ''}
           <span className="relative group">
             <InformationCircleIcon className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 cursor-help transition-colors" />
-            <span className="absolute left-0 top-5 z-20 hidden group-hover:block w-72 rounded-xl bg-slate-900 text-white text-xs p-3.5 shadow-xl ring-1 ring-white/10 leading-relaxed font-normal normal-case tracking-normal">
+            <span className="absolute left-0 top-5 z-20 hidden group-hover:block w-80 rounded-xl bg-slate-900 text-white text-xs p-3.5 shadow-xl ring-1 ring-white/10 leading-relaxed font-normal normal-case tracking-normal">
               <p className="font-semibold mb-1.5">Hoe werken accounts?</p>
               <p className="text-slate-300 mb-2">
-                Elke account heeft zijn eigen <strong className="text-white">start- en einddatum</strong>.
-                Dit is de levenscyclus van die specifieke gebruiker.
+                Elke account is een aparte licentie met een eigen <strong className="text-white">start- en vervaldatum</strong>.
               </p>
               <p className="text-slate-300 mb-2">
-                <strong className="text-white">Einddatum leeg</strong> = doorlopend (∞). Iemand verlaat het bedrijf?
-                Vul de laatste werkdag in.
+                <strong className="text-white">Auto-verlenging aan</strong> → vervaldatum schuift automatisch door (handig voor ChatGPT/OpenAI individueel).
+              </p>
+              <p className="text-slate-300 mb-2">
+                <strong className="text-white">Auto-verlenging uit</strong> → account stopt op vervaldatum. Bv. wanneer iemand vertrekt.
               </p>
               <p className="text-slate-300">
-                De vervaldatum + auto-verlenging op het abonnement zelf zijn voor het
-                hoofdcontract met de leverancier — niet per gebruiker.
+                <strong className="text-white">Vervaldatum leeg</strong> = doorlopend zonder einde.
               </p>
             </span>
           </span>
@@ -228,13 +228,22 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period }) 
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-500 mb-1">Einddatum</label>
+                  <label className="block text-xs text-slate-500 mb-1">Vervaldatum</label>
                   <input
                     type="date"
                     value={account.end_date || ''}
                     onChange={(e) => updateAccount(idx, { end_date: e.target.value })}
                     className={inputClass}
                   />
+                  <label className="flex items-center gap-1.5 mt-1.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={!!account.auto_renew}
+                      onChange={(e) => updateAccount(idx, { auto_renew: e.target.checked })}
+                      className="rounded border-slate-300 text-primary focus:ring-primary/30 cursor-pointer"
+                    />
+                    <span className="text-[11px] text-slate-500">Auto-verlenging</span>
+                  </label>
                 </div>
                 <div>
                   <label className="block text-xs text-slate-500 mb-1">
@@ -356,6 +365,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
           owner_name: a.owner_name || '',
           start_date: a.start_date ? a.start_date.split('T')[0] : '',
           end_date: a.end_date ? a.end_date.split('T')[0] : '',
+          auto_renew: !!a.auto_renew,
           cost: a.cost ?? '',
         }));
         setAccounts(formatted);
@@ -440,6 +450,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
       owner_name: a.owner_name || null,
       start_date: a.start_date || null,
       end_date: a.end_date || null,
+      auto_renew: !!a.auto_renew,
       cost: a.cost === '' || a.cost === null || a.cost === undefined ? null : parseFloat(a.cost),
     }));
     if (toInsert.length > 0) {
@@ -456,6 +467,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
       const changed = orig.owner_name !== a.owner_name
         || orig.start_date !== a.start_date
         || orig.end_date !== a.end_date
+        || !!orig.auto_renew !== !!a.auto_renew
         || origCost !== newCost;
       if (changed) {
         // eslint-disable-next-line no-await-in-loop
@@ -463,6 +475,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
           owner_name: a.owner_name || null,
           start_date: a.start_date || null,
           end_date: a.end_date || null,
+          auto_renew: !!a.auto_renew,
           cost: newCost,
           updated_at: new Date().toISOString(),
         }).eq('id', a.id);
@@ -536,7 +549,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
         const start = a.start_date ? new Date(a.start_date) : null;
         const end = a.end_date ? new Date(a.end_date) : null;
         if (start && start > today) return false;
-        if (end && end < today) return false;
+        if (end && end < today && !a.auto_renew) return false;
         return true;
       });
       variablePerPeriod = activeAccounts.reduce((sum, a) => {

@@ -55,7 +55,8 @@ function AccountRow({ acc, parentCost, currency }) {
   const today = new Date();
   const start = acc.start_date ? new Date(acc.start_date) : null;
   const end = acc.end_date ? new Date(acc.end_date) : null;
-  const isActive = (!start || start <= today) && (!end || end >= today);
+  // Met auto_renew aan: cron houdt end_date in de toekomst, dus altijd actief vanaf start
+  const isActive = (!start || start <= today) && (!end || end >= today || acc.auto_renew);
   const isFuture = start && start > today;
   const stateLabel = isActive ? 'Actief' : isFuture ? 'Toekomstig' : 'Beëindigd';
   const stateColor = isActive ? 'bg-green-500' : isFuture ? 'bg-blue-500' : 'bg-slate-400';
@@ -69,7 +70,12 @@ function AccountRow({ acc, parentCost, currency }) {
     <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 last:border-0">
       <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${stateColor}`} />
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-slate-900 truncate">{acc.owner_name || 'Zonder naam'}</p>
+        <p className="text-sm font-medium text-slate-900 truncate flex items-center gap-1.5">
+          {acc.owner_name || 'Zonder naam'}
+          {acc.auto_renew && (
+            <span title="Auto-verlenging aan" className="text-[10px] text-primary font-semibold">↻</span>
+          )}
+        </p>
         <p className="text-xs text-slate-400 mt-0.5 tabular-nums">
           {acc.start_date ? formatDate(acc.start_date) : '?'}
           {' → '}
@@ -118,7 +124,7 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
         const start = a.start_date ? new Date(a.start_date) : null;
         const end = a.end_date ? new Date(a.end_date) : null;
         if (start && start > today) return false;
-        if (end && end < today) return false;
+        if (end && end < today && !a.auto_renew) return false;
         return true;
       })
       .reduce((sum, a) => {

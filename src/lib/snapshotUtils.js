@@ -10,7 +10,7 @@ function isAccountActiveInRange(account, firstDay, lastDay) {
   const start = account.start_date ? new Date(account.start_date) : null;
   const end = account.end_date ? new Date(account.end_date) : null;
   if (start && start > lastDay) return false;
-  if (end && end < firstDay) return false;
+  if (end && end < firstDay && !account.auto_renew) return false;
   return true;
 }
 

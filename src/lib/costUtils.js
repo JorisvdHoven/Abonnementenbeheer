@@ -34,11 +34,13 @@ export function toMonthly(cost, period) {
 }
 
 // Is een account actief tussen first en last dag van een maand?
+// Met auto_renew = true wordt end_date door de cron in de toekomst gehouden,
+// dus account telt als actief zolang start_date <= laatste dag van de maand.
 function isAccountActiveInRange(account, firstDay, lastDay) {
   const start = account.start_date ? new Date(account.start_date) : null;
   const end = account.end_date ? new Date(account.end_date) : null;
   if (start && start > lastDay) return false;
-  if (end && end < firstDay) return false;
+  if (end && end < firstDay && !account.auto_renew) return false;
   return true;
 }
 
