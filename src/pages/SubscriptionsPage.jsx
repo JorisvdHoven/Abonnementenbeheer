@@ -8,6 +8,7 @@ import { SubscriptionDetailPanel } from '../components/SubscriptionDetailPanel';
 import { SubLogo } from '../components/SubLogo';
 import Modal from '../components/Modal';
 import BulkEditModal from '../components/BulkEditModal';
+import MultiSelect from '../components/MultiSelect';
 import { toast } from '../lib/toast';
 import { addDays, isBefore } from 'date-fns';
 import { toMonthly, toEurMonthly, countActiveAccountsNow, getBillingModel, BILLING_MODELS, BILLING_MODEL_LABELS } from '../lib/costUtils';
@@ -359,9 +360,9 @@ function SubscriptionsPage() {
   const { isAdmin } = useCurrentUser();
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 250);
-  const [categoryFilter, setCategoryFilter] = useState('');
-  const [billingModelFilter, setBillingModelFilter] = useState('');
-  const [departmentFilter, setDepartmentFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState(new Set());
+  const [billingModelFilter, setBillingModelFilter] = useState(new Set());
+  const [departmentFilter, setDepartmentFilter] = useState(new Set());
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSub, setEditingSub] = useState(null);
   const [detailSub, setDetailSub] = useState(null);
@@ -440,9 +441,9 @@ function SubscriptionsPage() {
       (sub.contact_name?.toLowerCase().includes(q)) ||
       (sub.account_owner?.toLowerCase().includes(q));
     return matchSearch
-      && (!categoryFilter || sub.category === categoryFilter)
-      && (!billingModelFilter || getBillingModel(sub) === billingModelFilter)
-      && (!departmentFilter || sub.department === departmentFilter);
+      && (categoryFilter.size === 0 || categoryFilter.has(sub.category))
+      && (billingModelFilter.size === 0 || billingModelFilter.has(getBillingModel(sub)))
+      && (departmentFilter.size === 0 || departmentFilter.has(sub.department));
   });
 
   const now = new Date();
@@ -552,21 +553,36 @@ function SubscriptionsPage() {
             className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors"
           />
         </div>
-        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className={filterSelectClass}>
-          <option value="">Alle categorieën</option>
-          {categories.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select value={billingModelFilter} onChange={(e) => setBillingModelFilter(e.target.value)} className={filterSelectClass}>
-          <option value="">Alle kostenmodellen</option>
-          {BILLING_MODELS.map(m => {
-            const count = subscriptions.filter(s => getBillingModel(s) === m.value).length;
-            return <option key={m.value} value={m.value}>{m.label} ({count})</option>;
-          })}
-        </select>
-        <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)} className={filterSelectClass}>
-          <option value="">Alle afdelingen</option>
-          {departmentsList.map(d => <option key={d} value={d}>{d}</option>)}
-        </select>
+        <MultiSelect
+          placeholder="Alle afdelingen"
+          selected={departmentFilter}
+          onChange={setDepartmentFilter}
+          options={departmentsList.map(d => ({
+            value: d,
+            label: d,
+            count: subscriptions.filter(s => s.department === d).length,
+          }))}
+        />
+        <MultiSelect
+          placeholder="Alle categorieën"
+          selected={categoryFilter}
+          onChange={setCategoryFilter}
+          options={categories.map(c => ({
+            value: c,
+            label: c,
+            count: subscriptions.filter(s => s.category === c).length,
+          }))}
+        />
+        <MultiSelect
+          placeholder="Alle kostenmodellen"
+          selected={billingModelFilter}
+          onChange={setBillingModelFilter}
+          options={BILLING_MODELS.map(m => ({
+            value: m.value,
+            label: m.label,
+            count: subscriptions.filter(s => getBillingModel(s) === m.value).length,
+          }))}
+        />
       </div>
 
       {/* Sections */}
