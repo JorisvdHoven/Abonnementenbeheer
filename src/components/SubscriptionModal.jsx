@@ -206,7 +206,7 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period }) 
             {accounts.map((account, idx) => (
               <div
                 key={account.id ?? account._tempId ?? idx}
-                className="p-3 grid grid-cols-1 sm:grid-cols-[1fr,140px,140px,140px,auto] gap-2 items-end"
+                className="p-3 grid grid-cols-1 sm:grid-cols-[1fr,140px,180px,140px,auto] gap-2 items-end"
               >
                 <div>
                   <label className="block text-xs text-slate-500 mb-1">Naam medewerker</label>
@@ -229,27 +229,29 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period }) 
                 </div>
                 <div>
                   <label className="block text-xs text-slate-500 mb-1">Vervaldatum</label>
-                  <input
-                    type="date"
-                    value={account.end_date || ''}
-                    onChange={(e) => updateAccount(idx, { end_date: e.target.value })}
-                    className={inputClass}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => updateAccount(idx, { auto_renew: !account.auto_renew })}
-                    title={account.auto_renew
-                      ? 'Auto-verlenging aan — vervaldatum schuift automatisch door'
-                      : 'Auto-verlenging uit — account stopt op vervaldatum'}
-                    className={`mt-1.5 inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition-all ${
-                      account.auto_renew
-                        ? 'bg-primary/15 text-primary hover:bg-primary/20'
-                        : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                    }`}
-                  >
-                    <span className={account.auto_renew ? '' : 'opacity-50'}>↻</span>
-                    Auto-verlenging
-                  </button>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="date"
+                      value={account.end_date || ''}
+                      onChange={(e) => updateAccount(idx, { end_date: e.target.value })}
+                      className={`flex-1 min-w-0 ${inputClass}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => updateAccount(idx, { auto_renew: !account.auto_renew })}
+                      title={account.auto_renew
+                        ? 'Auto-verlenging aan — vervaldatum schuift automatisch door'
+                        : 'Auto-verlenging uit — account stopt op vervaldatum'}
+                      className={`flex-shrink-0 h-9 w-9 inline-flex items-center justify-center rounded-md text-base font-semibold transition-all ${
+                        account.auto_renew
+                          ? 'bg-primary/15 text-primary hover:bg-primary/20'
+                          : 'bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600'
+                      }`}
+                      aria-label={account.auto_renew ? 'Auto-verlenging aan' : 'Auto-verlenging uit'}
+                    >
+                      ↻
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs text-slate-500 mb-1">
