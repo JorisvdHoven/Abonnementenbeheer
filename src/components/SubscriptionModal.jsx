@@ -393,7 +393,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
     if (formData.cost !== '' && (isNaN(parseFloat(formData.cost)) || parseFloat(formData.cost) < 0))
       errors.cost = 'Voer een geldig bedrag in (bijv. 9.99).';
     if (showSeats && formData.seats !== '' && (isNaN(parseInt(formData.seats)) || parseInt(formData.seats) < 1))
-      errors.seats = 'Aantal seats moet minimaal 1 zijn.';
+      errors.seats = 'Aantal gebruikers moet minimaal 1 zijn.';
     if (formData.start_date && isNaN(Date.parse(formData.start_date))) errors.start_date = 'Datum niet juist ingevoerd.';
     if (formData.end_date && isNaN(Date.parse(formData.end_date))) errors.end_date = 'Datum niet juist ingevoerd.';
     if (formData.end_date && formData.start_date && new Date(formData.end_date) < new Date(formData.start_date))
@@ -600,14 +600,14 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
               className={inputClass}
             >
               <option value="flat">Vast bedrag</option>
-              <option value="per_seat">Per gebruiker (seats)</option>
+              <option value="per_seat">Per gebruiker</option>
               <option value="per_account">Per persoonlijk account</option>
               <option value="license_plus_seats">Vaste licentie + per gebruiker</option>
               <option value="variable">Op basis van verbruik</option>
             </select>
             <p className="mt-1.5 text-xs text-slate-500 leading-relaxed">
               {isFlat        && <>Eén vast bedrag per facturatieperiode. Bv. Slack workspace, Netflix.</>}
-              {isPerSeat     && <>Iedere gebruiker betaalt hetzelfde tarief × aantal seats. Bv. Microsoft 365, Slack Pro.</>}
+              {isPerSeat     && <>Iedere gebruiker betaalt hetzelfde tarief × aantal gebruikers. Bv. Microsoft 365, Slack Pro.</>}
               {isPerAccount  && <>Iedere medewerker heeft een eigen account met eigen start-/einddatum en eventueel eigen prijs. Bv. LinkedIn Pro, Adobe individueel.</>}
               {isLicSeats    && <>Vaste licentie naast variabele kosten per gebruiker. Bv. Carerix (€300 licentie + €10/gebruiker).</>}
               {isVariable    && <>Bedrag varieert per maand op basis van gebruik. Vul een schatting in — wordt overal getoond met ±. Bv. AWS, Stripe fees, OpenAI API.</>}
@@ -618,9 +618,9 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
           <FieldGrid>
             <Field
               label={
-                isPerSeat        ? 'Prijs per seat' :
+                isPerSeat        ? 'Prijs per gebruiker' :
                 isPerAccount     ? 'Standaardprijs per account' :
-                isLicSeats       ? 'Prijs per seat' :
+                isLicSeats       ? 'Prijs per gebruiker' :
                 isVariable       ? 'Geschatte kosten' :
                                    'Bedrag'
               }
@@ -675,9 +675,9 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
             </Field>
           )}
 
-          {/* Conditional: aantal seats */}
+          {/* Conditional: aantal gebruikers */}
           {showSeats && (
-            <Field label="Aantal seats" value={formData.seats} error={fieldErrors.seats}>
+            <Field label="Aantal gebruikers" value={formData.seats} error={fieldErrors.seats}>
               <input
                 type="number"
                 name="seats"

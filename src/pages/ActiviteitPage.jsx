@@ -53,7 +53,7 @@ const FIELD_LABELS = {
   contact_name: 'Contactpersoon',
   contact_email: 'E-mail contact',
   contact_phone: 'Telefoon',
-  seats: 'Seats',
+  seats: 'Gebruikers',
   notes: 'Notities',
   terms: 'Voorwaarden',
   role: 'Rol',

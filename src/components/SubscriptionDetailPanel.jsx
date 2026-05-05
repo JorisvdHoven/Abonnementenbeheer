@@ -223,7 +223,7 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
             <DetailRow label="Categorie" value={sub.category} />
             <DetailRow label="Type" value={sub.type} />
             <DetailRow label="Afdeling" value={sub.department} />
-            {!hasAccounts && <DetailRow label="Seats" value={sub.seats} mono />}
+            {!hasAccounts && <DetailRow label="Gebruikers" value={sub.seats} mono />}
           </Section>
 
           {hasAccounts && (
