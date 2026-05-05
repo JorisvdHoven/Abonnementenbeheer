@@ -26,7 +26,6 @@ import {
 const EXPORT_FIELDS = [
   { key: 'name',         label: 'Naam',              getValue: s => s.name ?? '' },
   { key: 'vendor',       label: 'Leverancier',        getValue: s => s.vendor ?? '' },
-  { key: 'account_owner',label: 'Account van',        getValue: s => s.account_owner ?? '' },
   { key: 'category',     label: 'Categorie',          getValue: s => s.category ?? '' },
   { key: 'department',   label: 'Afdeling',           getValue: s => s.department ?? '' },
   { key: 'billing_model',label: 'Kostenmodel',        getValue: s => BILLING_MODEL_LABELS[getBillingModel(s)] ?? '' },
@@ -45,7 +44,7 @@ const EXPORT_FIELDS = [
   { key: 'notes',        label: 'Notities',           getValue: s => s.notes ?? '' },
 ];
 
-const DEFAULT_SELECTED = new Set(['name','vendor','account_owner','category','department','billing_model','status','cost','currency','cost_period','renewal_date']);
+const DEFAULT_SELECTED = new Set(['name','vendor','category','department','billing_model','status','cost','currency','cost_period','renewal_date']);
 
 function ExportModal({ count, onExport, onClose }) {
   const [selected, setSelected] = useState(new Set(DEFAULT_SELECTED));
@@ -194,7 +193,7 @@ function SubRow({ sub, onView, showUrgency, isSelectable, isSelected, onToggleSe
               const activeCount = hasAccounts ? countActiveAccountsNow(sub.accounts) : 0;
               const subtitle = hasAccounts
                 ? `${activeCount} actieve account${activeCount !== 1 ? 's' : ''}`
-                : sub.account_owner;
+                : null;
               return (sub.vendor || subtitle) && (
                 <p className="text-xs text-slate-400 mt-0.5 truncate">
                   {sub.vendor}
@@ -437,8 +436,7 @@ function SubscriptionsPage() {
     const q = debouncedSearch.toLowerCase();
     const matchSearch = sub.name.toLowerCase().includes(q) ||
       (sub.vendor?.toLowerCase().includes(q)) ||
-      (sub.contact_name?.toLowerCase().includes(q)) ||
-      (sub.account_owner?.toLowerCase().includes(q));
+      (sub.contact_name?.toLowerCase().includes(q));
     return matchSearch
       && (categoryFilter.size === 0 || categoryFilter.has(sub.category))
       && (billingModelFilter.size === 0 || billingModelFilter.has(getBillingModel(sub)))

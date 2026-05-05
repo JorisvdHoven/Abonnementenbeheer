@@ -789,11 +789,6 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
         {/* Contact (collapsible) */}
         <CollapsibleSection label="Contact" hint="Contactpersoon bij de leverancier — optioneel">
           <FieldGrid>
-            {!isPerAccount && (
-              <Field label="Account van" value={formData.account_owner} hint="De interne medewerker bij wie dit account hoort.">
-                <input type="text" name="account_owner" value={formData.account_owner} onChange={handleChange} placeholder="Bijv. Joris van den Hoven" className={inputClass} />
-              </Field>
-            )}
             <Field label="Contactpersoon" value={formData.contact_name}>
               <input type="text" name="contact_name" value={formData.contact_name} onChange={handleChange} className={inputClass} />
             </Field>

@@ -219,7 +219,6 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
 
           <Section title="Abonnement">
-            {!hasAccounts && <DetailRow label="Account van" value={sub.account_owner} />}
             <DetailRow label="Categorie" value={sub.category} />
             <DetailRow label="Kostenmodel" value={BILLING_MODEL_LABELS[getBillingModel(sub)]} />
             <DetailRow label="Afdeling" value={sub.department} />
