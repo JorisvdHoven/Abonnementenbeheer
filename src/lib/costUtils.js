@@ -21,7 +21,7 @@ export const BILLING_MODEL_LABELS = Object.fromEntries(
 export function getBillingModel(sub) {
   if (!sub) return 'flat';
   if (sub.is_variable_cost) return 'variable';
-  if (sub.accounts && sub.accounts.length > 0) return 'per_account';
+  if (sub.accounts && sub.accounts.some(a => !a.archived_at)) return 'per_account';
   if (sub.base_cost && parseFloat(sub.base_cost) > 0) return 'license_plus_seats';
   if (sub.cost_per_seat) return 'per_seat';
   return 'flat';
@@ -55,11 +55,22 @@ function activeAccountsInMonth(accounts, year, month) {
   return accounts.filter(a => isAccountActiveInRange(a, firstDay, lastDay));
 }
 
-// Aantal actieve accounts NU
+// Aantal accounts dat NU actief is (UI badge / lijst-count).
+// Strikter dan activeAccountsInMonth: zodra archived_at gezet is, telt het account
+// niet meer mee — ook al valt archived_at binnen de huidige maand. (Historische
+// kosten blijven wel in snapshots staan via toEurMonthlyFor / activeAccountsInMonth.)
 export function countActiveAccountsNow(accounts) {
   if (!accounts?.length) return 0;
   const now = new Date();
-  return activeAccountsInMonth(accounts, now.getFullYear(), now.getMonth()).length;
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return accounts.filter(a => {
+    if (a.archived_at) return false;
+    const start = a.start_date ? new Date(a.start_date) : null;
+    if (start && start > lastDay) return false;
+    const end = a.end_date ? new Date(a.end_date) : null;
+    if (end && end < now && !a.auto_renew) return false;
+    return true;
+  }).length;
 }
 
 // Effectieve kosten van een account: eigen cost als die er is, anders parent.cost
