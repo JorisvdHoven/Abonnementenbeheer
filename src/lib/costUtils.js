@@ -147,8 +147,11 @@ function monthlyNative(sub, accountsForMonth) {
   return flat * parentFactor;
 }
 
-// Maandkosten in euro, rekening houdend met base_cost, seats/accounts en valuta-conversie.
-// `rates` is een object zoals { USD: 0.93, GBP: 1.15, CHF: 1.05 } — 1 unit = X EUR.
+// Maandkosten in euro voor de HUIDIGE situatie. Gebruikt strikte 'NU actief'
+// definitie (activeAccountsNow): zodra archived_at gezet is telt het account
+// niet meer mee — consistent met de UI badge en subtitle. Voor historische
+// snapshots (waar gearchiveerde accounts in hun archief-maand wél meegerekend
+// moeten worden) gebruik je toEurMonthlyFor.
 export function toEurMonthly(sub, rates = {}) {
   const ratesObj = typeof rates === 'number' ? { USD: rates } : rates;
   const fxRate = sub.currency && sub.currency !== 'EUR'
@@ -156,7 +159,7 @@ export function toEurMonthly(sub, rates = {}) {
     : 1;
 
   const activeAccts = sub.accounts && sub.accounts.length > 0
-    ? activeAccountsInMonth(sub.accounts, new Date().getFullYear(), new Date().getMonth())
+    ? activeAccountsNow(sub.accounts)
     : [];
 
   return monthlyNative(sub, activeAccts) * fxRate;

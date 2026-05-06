@@ -262,65 +262,56 @@ const COLUMNS = [
   { key: 'status',       label: 'Status',          className: 'hidden sm:table-cell' },
 ];
 
-// Inline lijst van accounts die verschijnt onder een uitgeklapte SubRow.
+// Eén rij per account in de uitgeklapte sectie — uitgelijnd met de
+// parent-kolommen (naam, afdeling, kosten, vervaldatum, status).
 // Read-only — bewerken gebeurt via het detail-panel of de modal.
-function AccountsExpandedRow({ sub, totalColumns }) {
-  const liveAccounts = (sub.accounts || []).filter(a => !a.archived_at);
+function AccountExpandedRow({ acc, sub, isSelectable, isLast }) {
   const sym = currencySymbol(sub.currency);
 
-  // Helper: bepaal effectieve periode + datums per account (fallback parent)
-  const periodOf = (a) => a.cost_period || sub.cost_period;
-  const startOf  = (a) => a.start_date  || sub.start_date;
-  const endOf    = (a) => a.end_date    || sub.renewal_date;
-  const costOf   = (a) => {
-    if (a.cost !== null && a.cost !== undefined && a.cost !== '') return parseFloat(a.cost) || 0;
-    return parseFloat(sub.cost) || 0;
-  };
+  // Effectieve waardes (fallback op parent indien account-veld leeg)
+  const period = acc.cost_period || sub.cost_period;
+  const start = acc.start_date || sub.start_date;
+  const end = acc.end_date || sub.renewal_date;
+  const cost = (acc.cost !== null && acc.cost !== undefined && acc.cost !== '')
+    ? parseFloat(acc.cost) || 0
+    : parseFloat(sub.cost) || 0;
+  const monthly = cost * (acc.cost_period
+    ? getMonthlyFactor({ ...acc, start_date: start, renewal_date: end })
+    : getMonthlyFactor(sub));
 
   return (
-    <tr className="bg-slate-50/40 border-b border-slate-100 last:border-0">
-      <td colSpan={totalColumns} className="px-0 py-0">
-        <div className="px-5 py-3 pl-16">
-          {liveAccounts.length === 0 ? (
-            <p className="text-xs text-slate-400 italic">Geen actieve accounts.</p>
-          ) : (
-            <div className="space-y-1">
-              {liveAccounts.map(acc => {
-                const period = periodOf(acc);
-                const start = startOf(acc);
-                const end = endOf(acc);
-                const cost = costOf(acc);
-                const monthly = cost * (acc.cost_period
-                  ? getMonthlyFactor({ ...acc, start_date: start, renewal_date: end })
-                  : getMonthlyFactor(sub));
-                return (
-                  <div key={acc.id} className="flex items-center gap-3 py-1.5">
-                    <AccountAvatar name={acc.owner_name} size="sm" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-slate-700 truncate flex items-center gap-1.5">
-                        {acc.owner_name || <span className="italic text-slate-400">Zonder naam</span>}
-                        {acc.auto_renew && (
-                          <span title="Auto-verlenging aan" className="text-[10px] text-primary font-semibold">↻</span>
-                        )}
-                      </p>
-                      <p className="text-xs text-slate-400 tabular-nums">
-                        {period && <>{period}{(start || end) && ' · '}</>}
-                        {start ? formatDateLong(start) : '?'}
-                        {' → '}
-                        {end ? formatDateLong(end) : '∞'}
-                      </p>
-                    </div>
-                    <div className="text-sm font-medium text-slate-700 tabular-nums flex-shrink-0">
-                      {sym}{monthly.toFixed(2)}
-                      <span className="text-xs text-slate-400 ml-0.5">/mnd</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+    <tr className={`bg-slate-50/40 ${isLast ? '' : 'border-b border-slate-100'}`}>
+      {isSelectable && <td className="pl-5 py-2.5" />}
+      {/* Naam-kolom: avatar + naam (ingedeukt zodat 't visueel een sub-item is) */}
+      <td className="px-5 py-2.5">
+        <div className="flex items-center gap-3 pl-9">
+          <AccountAvatar name={acc.owner_name} size="sm" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-slate-700 truncate flex items-center gap-1.5">
+              {acc.owner_name || <span className="italic text-slate-400">Zonder naam</span>}
+              {acc.auto_renew && (
+                <span title="Auto-verlenging aan" className="text-[10px] text-primary font-semibold">↻</span>
+              )}
+            </p>
+            {period && period !== sub.cost_period && (
+              <p className="text-xs text-slate-400 truncate">{period}</p>
+            )}
+          </div>
         </div>
       </td>
+      {/* Afdeling-kolom: leeg (afdeling is parent-niveau) */}
+      <td className="px-5 py-2.5 hidden md:table-cell" />
+      {/* Kosten-kolom: per-account maandelijkse kosten */}
+      <td className="px-5 py-2.5 text-sm font-medium text-slate-700 tabular-nums">
+        {sym}{monthly.toFixed(2)}
+        <span className="text-xs text-slate-400 ml-0.5">/mnd</span>
+      </td>
+      {/* Vervaldatum-kolom: account einddatum */}
+      <td className="px-5 py-2.5 hidden lg:table-cell text-sm text-slate-500 tabular-nums">
+        {end ? formatDateLong(end) : <span className="text-slate-300">—</span>}
+      </td>
+      {/* Status-kolom: leeg (status is parent-niveau) */}
+      <td className="px-5 py-2.5 hidden sm:table-cell" />
     </tr>
   );
 }
@@ -426,9 +417,9 @@ function Section({ title, rows, onView, showUrgency, accent, isSelectable, selec
               <tbody>
                 {sorted.map(sub => {
                   const isExpanded = expandedSubs.has(sub.id);
-                  // Aantal kolommen voor colSpan in de uitgeklapte rij — moet matchen
-                  // met wat zichtbaar is (alle 5 + optioneel checkbox-kolom).
-                  const totalColumns = COLUMNS.length + (isSelectable ? 1 : 0);
+                  const liveAccounts = isExpanded
+                    ? (sub.accounts || []).filter(a => !a.archived_at)
+                    : [];
                   return (
                     <Fragment key={sub.id}>
                       <SubRow
@@ -441,9 +432,15 @@ function Section({ title, rows, onView, showUrgency, accent, isSelectable, selec
                         isExpanded={isExpanded}
                         onToggleExpand={toggleExpanded}
                       />
-                      {isExpanded && (
-                        <AccountsExpandedRow sub={sub} totalColumns={totalColumns} />
-                      )}
+                      {isExpanded && liveAccounts.map((acc, idx) => (
+                        <AccountExpandedRow
+                          key={acc.id || acc._tempId}
+                          acc={acc}
+                          sub={sub}
+                          isSelectable={isSelectable}
+                          isLast={idx === liveAccounts.length - 1}
+                        />
+                      ))}
                     </Fragment>
                   );
                 })}
