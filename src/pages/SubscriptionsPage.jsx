@@ -414,9 +414,11 @@ const STATUS_ORDER = { actief: 0, verlopen: 1, opgezegd: 2 };
 // actieve subs altijd boven verlopen/opgezegde komen, ongeacht de
 // gekozen primary sort.
 function SubscriptionsTable({ rows, onView, isSelectable, selected, onToggleSelect, onToggleAll, isAllesTab }) {
-  // Default sort: kosten hoog → laag
-  const [sortKey, setSortKey] = useState('cost');
-  const [sortDir, setSortDir] = useState('desc');
+  // Default: geen sortering — rij-volgorde uit DB / filter behouden.
+  // Bij klik op kolom-header: kosten gaat default naar desc (hoog→laag),
+  // andere kolommen naar asc (logische default).
+  const [sortKey, setSortKey] = useState(null);
+  const [sortDir, setSortDir] = useState('asc');
   const [expandedSubs, setExpandedSubs] = useState(new Set());
 
   const toggleExpanded = (id) => {
