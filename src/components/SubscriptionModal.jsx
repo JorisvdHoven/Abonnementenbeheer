@@ -220,6 +220,28 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period, pa
     }]);
   };
 
+  // Sync parent.start_date / parent.renewal_date naar accounts die hun eigen
+  // velden nog niet hebben gezet. Edge case: gebruiker voegt account toe
+  // VOORDAT parent.start_date is ingevuld → account blijft leeg. Met deze
+  // effect wordt het account alsnog gevuld zodra parent een datum krijgt.
+  // Accounts die al een eigen start_date hebben blijven ongemoeid.
+  useEffect(() => {
+    if (!parentStartDate && !parentRenewalDate) return;
+    const needsSync = accounts.some(a => {
+      if (a.archived_at) return false;
+      return (parentStartDate && !a.start_date) || (parentRenewalDate && !a.end_date);
+    });
+    if (!needsSync) return;
+    onChange(accounts.map(a => {
+      if (a.archived_at) return a;
+      const next = { ...a };
+      if (parentStartDate && !a.start_date) next.start_date = parentStartDate;
+      if (parentRenewalDate && !a.end_date) next.end_date = parentRenewalDate;
+      return next;
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parentStartDate, parentRenewalDate]);
+
   // Bij wijzigen van account-periode: auto-fill end_date (alleen als de huidige
   // end_date nog matched met de oude auto-fill of leeg is). Bij Anders: niet
   // auto-fillen, gebruiker vult zelf in. Bij Eenmalig: end_date leeg.
