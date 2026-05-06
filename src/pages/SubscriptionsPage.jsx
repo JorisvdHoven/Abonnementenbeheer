@@ -113,10 +113,20 @@ function ExportModal({ count, onExport, onClose }) {
   );
 }
 
+// Effectieve auto-verlenging — bij per_account is parent.auto_renew altijd
+// false (geforceerd in dataToSave), dus we kijken naar de accounts. Een sub
+// 'verlengt' als minstens één actief account auto-verlengt.
+function effectiveAutoRenew(sub) {
+  if (sub.accounts && sub.accounts.length > 0) {
+    return sub.accounts.some(a => !a.archived_at && a.auto_renew);
+  }
+  return !!sub.auto_renew;
+}
+
 // Helper: actieve sub die binnen 30 dagen afloopt en NIET auto-verlengt.
 // De oranje "Actief loopt af" is alleen voor deze urgente categorie.
 function isActiefLooptAf(sub) {
-  if (sub.status !== 'actief' || sub.auto_renew) return false;
+  if (sub.status !== 'actief' || effectiveAutoRenew(sub)) return false;
   const renewal = deriveRenewalDate(sub);
   if (!renewal) return false;
   const days = Math.ceil((new Date(renewal) - new Date()) / (1000 * 60 * 60 * 24));
@@ -301,7 +311,7 @@ function SubRow({ sub, onView, isSelectable, isSelected, onToggleSelect, isExpan
         {renewalDate ? (
           <div className="inline-flex items-center gap-2">
             <span className="text-sm text-slate-700 tabular-nums">{formatDateLong(renewalDate)}</span>
-            {sub.auto_renew && sub.status === 'actief' && (
+            {effectiveAutoRenew(sub) && sub.status === 'actief' && (
               <span title="Verlengt automatisch" className="text-primary text-base font-semibold leading-none">↻</span>
             )}
           </div>
