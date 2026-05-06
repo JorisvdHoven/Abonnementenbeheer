@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { BILLING_PERIODS, toMonthly, activeAccountsNow } from '../lib/costUtils';
+import { BILLING_PERIODS, toMonthly, getMonthlyFactor, activeAccountsNow } from '../lib/costUtils';
 import { currencySymbol, formatDate } from '../lib/format';
 import { ChevronDownIcon, PlusIcon, TrashIcon, InformationCircleIcon, ArrowUturnLeftIcon } from '@heroicons/react/24/outline';
 import { SubLogo } from './SubLogo';
@@ -63,9 +63,9 @@ function FieldGrid({ children }) {
   return <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{children}</div>;
 }
 
-function ToggleSwitch({ checked, onChange, label, hint }) {
+function ToggleSwitch({ checked, onChange, label, hint, disabled = false }) {
   return (
-    <label className="flex items-start justify-between gap-3 cursor-pointer">
+    <label className={`flex items-start justify-between gap-3 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
       <div className="flex-1">
         <span className="text-sm font-medium text-slate-700">{label}</span>
         {hint && <p className="text-xs text-slate-400 mt-0.5">{hint}</p>}
@@ -74,8 +74,9 @@ function ToggleSwitch({ checked, onChange, label, hint }) {
         type="button"
         role="switch"
         aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full transition-colors mt-0.5 ${checked ? 'bg-primary' : 'bg-slate-200'}`}
+        disabled={disabled}
+        onClick={() => !disabled && onChange(!checked)}
+        className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full transition-colors mt-0.5 ${disabled ? 'bg-slate-200 cursor-not-allowed' : (checked ? 'bg-primary' : 'bg-slate-200')}`}
       >
         <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform translate-y-0.5 ${checked ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
       </button>
@@ -425,10 +426,25 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
     return `${yyyy}-${mm}-${dd}`;
   };
 
-  const PERIOD_MONTHS = { 'Maandelijks': 1, 'Per kwartaal': 3, 'Jaarlijks': 12 };
+  const addDaysSafe = (isoDate, days) => {
+    if (!isoDate) return '';
+    const d = new Date(isoDate);
+    if (isNaN(d.getTime())) return '';
+    d.setDate(d.getDate() + days);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  // Auto-fill vervaldatum op basis van startdatum + facturatieperiode.
+  // 'Eenmalig' en 'Anders' krijgen geen auto-berekende waarde (Anders = handmatig).
+  const PERIOD_MONTHS = { 'Maandelijks': 1, 'Per kwartaal': 3, 'Halfjaarlijks': 6, 'Jaarlijks': 12 };
   const computeRenewalDate = (startDate, period) => {
+    if (!startDate) return '';
+    if (period === 'Wekelijks') return addDaysSafe(startDate, 7);
     const months = PERIOD_MONTHS[period];
-    if (!months || !startDate) return '';
+    if (!months) return '';
     return addMonthsSafe(startDate, months);
   };
 
@@ -516,23 +532,38 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
     setFormData(prev => {
       const next = { ...prev, [name]: newValue };
 
-      // Auto-fill renewal_date bij wijzigen van start_date of cost_period,
-      // mits we 'm zelf hebben ingevuld of het veld nog leeg is.
-      if (
+      // Eenmalig → auto-verlenging hoort uit te staan + renewal leeg
+      if (name === 'cost_period' && newValue === 'Eenmalig') {
+        next.auto_renew = false;
+        next.renewal_date = '';
+      }
+
+      // Anders → renewal niet auto-fillen, maar bestaande waarde laten staan
+      // zodat gebruiker bij switch van bv. Maandelijks → Anders zijn auto-berekende
+      // datum als startpunt heeft. Auto-fill flag uit zodat we 'm niet overschrijven.
+      if (name === 'cost_period' && newValue === 'Anders') {
+        // niets — renewal_date blijft staan, gebruiker past handmatig aan
+      } else if (
         (name === 'start_date' || name === 'cost_period') &&
-        (renewalAutoFilled || !prev.renewal_date)
+        (renewalAutoFilled || !prev.renewal_date) &&
+        newValue !== 'Eenmalig'
       ) {
+        // Auto-fill renewal bij wijzigen van start of period — alleen voor periodes
+        // die een vaste cyclus hebben (computeRenewalDate retourneert '' voor Anders).
         const computed = computeRenewalDate(
           name === 'start_date' ? newValue : prev.start_date,
           name === 'cost_period' ? newValue : prev.cost_period
         );
-        if (computed) {
-          next.renewal_date = computed;
-        }
+        if (computed) next.renewal_date = computed;
       }
 
       return next;
     });
+
+    // Bij switch naar Anders: zet flag op false zodat handmatige edits behouden blijven
+    if (name === 'cost_period' && newValue === 'Anders') {
+      setRenewalAutoFilled(false);
+    }
   };
 
   const handleFileChange = (e) => {
@@ -583,6 +614,11 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
     if (formData.renewal_date && isNaN(Date.parse(formData.renewal_date))) errors.renewal_date = 'Datum niet juist ingevoerd.';
     if (formData.renewal_date && formData.start_date && new Date(formData.renewal_date) < new Date(formData.start_date))
       errors.renewal_date = 'Vervaldatum mag niet vóór de startdatum liggen.';
+    // Anders: renewal_date verplicht (cycluslengte komt eruit)
+    if (formData.cost_period === 'Anders' && !isPerAccount) {
+      if (!formData.renewal_date) errors.renewal_date = 'Vervaldatum is verplicht bij periode "Anders".';
+      if (!formData.start_date) errors.start_date = 'Startdatum is verplicht bij periode "Anders".';
+    }
     if (formData.status === 'actief' && !formData.auto_renew && formData.renewal_date && new Date(formData.renewal_date) < new Date())
       errors.status = 'Status kan niet actief zijn als de vervaldatum al verlopen is en auto-verlenging uit staat.';
     return errors;
@@ -662,6 +698,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
       ? null
       : (parseFloat(formData.base_cost) || 0);
 
+    const isOneOff = formData.cost_period === 'Eenmalig';
     const dataToSave = {
       ...formData,
       account_owner: isPerAccount ? null : (formData.account_owner || null),
@@ -674,8 +711,9 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
       start_date: formData.start_date || null,
       end_date: null,
       // Bij per_account modus: parent renewal/auto_renew zijn niet meer relevant
-      renewal_date: isPerAccount ? null : (formData.renewal_date || null),
-      auto_renew: isPerAccount ? false : !!formData.auto_renew,
+      // Bij Eenmalig: geen renewal_date en auto_renew = false (onlogisch anders)
+      renewal_date: isPerAccount || isOneOff ? null : (formData.renewal_date || null),
+      auto_renew: isPerAccount || isOneOff ? false : !!formData.auto_renew,
       created_by: user?.id
     };
 
@@ -736,7 +774,8 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
 
     const total = baseFee + variablePerPeriod;
     if (total === 0) return null;
-    return toMonthly(total, formData.cost_period);
+    // Gebruik dynamische factor zodat 'Anders' (= berekend uit start→renewal) klopt.
+    return total * getMonthlyFactor(formData);
   })();
 
   const sym = currencySymbol(formData.currency);
@@ -901,10 +940,72 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
             />
           )}
 
+          {/* Datums — onderdeel van facturatie. Vervaldatum alleen tonen bij 'Anders'
+              (andere periodes hebben automatisch berekende vervaldatum). Bij per_account
+              wordt vervaldatum + auto-verlenging per account ingesteld. */}
+          <FieldGrid>
+            <Field
+              label="Startdatum"
+              value={formData.start_date}
+              error={fieldErrors.start_date}
+              hint={!fieldErrors.start_date
+                ? (isPerAccount
+                    ? 'Wanneer dit abonnement begon — gebruikt voor historische cashflow.'
+                    : 'Wanneer dit abonnement begon. Mag leeg gelaten worden.')
+                : undefined}
+            >
+              <input
+                type="date"
+                name="start_date"
+                value={formData.start_date}
+                onChange={handleChange}
+                className={fieldErrors.start_date ? inputClassError : inputClass}
+              />
+            </Field>
+            {!isPerAccount && formData.cost_period === 'Anders' && (
+              <Field
+                label="Vervaldatum"
+                value={formData.renewal_date}
+                error={fieldErrors.renewal_date}
+                hint={!fieldErrors.renewal_date
+                  ? 'Verplicht bij periode "Anders" — bepaalt de cycluslengte voor de maandberekening.'
+                  : undefined}
+              >
+                <input
+                  type="date"
+                  name="renewal_date"
+                  value={formData.renewal_date}
+                  onChange={handleChange}
+                  className={fieldErrors.renewal_date ? inputClassError : inputClass}
+                />
+              </Field>
+            )}
+          </FieldGrid>
+
+          {/* Auto-verlenging — niet bij per_account (per account ingesteld), uitgegrijsd bij Eenmalig */}
+          {!isPerAccount && (() => {
+            const isOneOff = formData.cost_period === 'Eenmalig';
+            return (
+              <div className={`rounded-lg bg-slate-50 border border-slate-100 px-4 py-3 ${isOneOff ? 'opacity-60' : ''}`}>
+                <ToggleSwitch
+                  label="Auto-verlenging"
+                  hint={isOneOff
+                    ? 'Niet van toepassing bij eenmalige aankopen.'
+                    : (formData.auto_renew
+                        ? 'Vervaldatum schuift automatisch door bij elke periode. Het abonnement blijft actief.'
+                        : 'Abonnement stopt op de vervaldatum. Schakel uit voor abonnementen die je opzegt.')}
+                  checked={!isOneOff && formData.auto_renew}
+                  onChange={(v) => !isOneOff && setFormData(prev => ({ ...prev, auto_renew: v }))}
+                  disabled={isOneOff}
+                />
+              </div>
+            );
+          })()}
+
           {/* Live preview onderaan */}
           {monthlyPreview !== null && (() => {
             const baseFee = showBase ? (parseFloat(formData.base_cost) || 0) : 0;
-            const baseFeeMonthly = toMonthly(baseFee, formData.cost_period);
+            const baseFeeMonthly = baseFee * getMonthlyFactor(formData);
             const variableMonthly = monthlyPreview - baseFeeMonthly;
             const showBreakdown = baseFee > 0 && variableMonthly > 0;
             return (
@@ -955,50 +1056,6 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
         <hr className="border-slate-100" />
 
         {/* Datums & verlenging */}
-        <Section label={isPerAccount ? 'Startdatum' : 'Datums & verlenging'}>
-          <FieldGrid>
-            <Field
-              label="Startdatum"
-              value={formData.start_date}
-              error={fieldErrors.start_date}
-              hint={!fieldErrors.start_date
-                ? (isPerAccount
-                    ? 'Wanneer dit abonnement begon — gebruikt voor historische cashflow.'
-                    : 'Mag leeg gelaten worden.')
-                : undefined}
-            >
-              <input type="date" name="start_date" value={formData.start_date} onChange={handleChange} className={fieldErrors.start_date ? inputClassError : inputClass} />
-            </Field>
-            {!isPerAccount && (
-              <Field
-                label="Vervaldatum"
-                value={formData.renewal_date}
-                error={fieldErrors.renewal_date}
-                hint={!fieldErrors.renewal_date
-                  ? (formData.auto_renew
-                      ? 'Schuift automatisch door naar volgende periode op deze datum.'
-                      : 'Op deze datum stopt het abonnement (tenzij verlengd).')
-                  : undefined}
-              >
-                <input type="date" name="renewal_date" value={formData.renewal_date} onChange={handleChange} className={fieldErrors.renewal_date ? inputClassError : inputClass} />
-              </Field>
-            )}
-          </FieldGrid>
-          {!isPerAccount && (
-            <div className="rounded-lg bg-slate-50 border border-slate-100 px-4 py-3">
-              <ToggleSwitch
-                label="Auto-verlenging"
-                hint={formData.auto_renew
-                  ? 'Vervaldatum schuift automatisch door bij elke periode. Het abonnement blijft actief.'
-                  : 'Abonnement stopt op de vervaldatum. Schakel uit voor abonnementen die je opzegt.'}
-                checked={formData.auto_renew}
-                onChange={(v) => setFormData(prev => ({ ...prev, auto_renew: v }))}
-              />
-            </div>
-          )}
-        </Section>
-
-        <hr className="border-slate-100" />
 
         {/* Contact (collapsible) */}
         <CollapsibleSection label="Contact" hint="Contactpersoon bij de leverancier — optioneel">

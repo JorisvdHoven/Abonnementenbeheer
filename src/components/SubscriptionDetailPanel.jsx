@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { XMarkIcon, PencilSquareIcon, TrashIcon, DocumentArrowDownIcon } from '@heroicons/react/24/outline';
 import { SubLogo } from './SubLogo';
-import { toMonthly, countActiveAccountsNow, activeAccountsNow, getBillingModel, BILLING_MODEL_LABELS } from '../lib/costUtils';
+import { toMonthly, getMonthlyFactor, countActiveAccountsNow, activeAccountsNow, getBillingModel, BILLING_MODEL_LABELS } from '../lib/costUtils';
 import { formatDate, formatDateLong, currencySymbol } from '../lib/format';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useLatestAuditFor } from '../hooks/useAuditLog';
@@ -143,7 +143,7 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
 
   const perPeriodTotal = baseCost + variablePerPeriod;
   const monthly = sub.cost_period && sub.cost_period !== 'Eenmalig'
-    ? toMonthly(perPeriodTotal, sub.cost_period)
+    ? perPeriodTotal * getMonthlyFactor(sub)
     : null;
 
   const sym = currencySymbol(sub.currency);

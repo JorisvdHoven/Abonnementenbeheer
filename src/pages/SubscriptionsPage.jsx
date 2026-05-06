@@ -11,7 +11,7 @@ import BulkEditModal from '../components/BulkEditModal';
 import MultiSelect from '../components/MultiSelect';
 import { toast } from '../lib/toast';
 import { addDays, isBefore } from 'date-fns';
-import { toMonthly, toEurMonthly, countActiveAccountsNow, getBillingModel, BILLING_MODELS, BILLING_MODEL_LABELS } from '../lib/costUtils';
+import { toMonthly, toEurMonthly, getMonthlyFactor, countActiveAccountsNow, getBillingModel, BILLING_MODELS, BILLING_MODEL_LABELS } from '../lib/costUtils';
 import { formatDate, formatDateLong, currencySymbol } from '../lib/format';
 import {
   ChevronDownIcon,
@@ -256,7 +256,7 @@ function Section({ title, rows, onView, showUrgency, accent, isSelectable, selec
   };
 
   const getSortVal = (sub, key) => {
-    if (key === 'cost') return toMonthly(sub.cost || 0, sub.cost_period);
+    if (key === 'cost') return (sub.cost || 0) * getMonthlyFactor(sub);
     if (key === 'renewal_date') return sub.renewal_date || null;
     return sub[key] ?? null;
   };
@@ -595,7 +595,7 @@ function SubscriptionsPage() {
   // Tellingen + totalen op basis van LIVE subs (gearchiveerd telt niet mee)
   const totalMonthly = liveSubscriptions
     .filter(s => s.status === 'actief')
-    .reduce((sum, s) => sum + (toMonthly(s.cost, s.cost_period) || 0), 0);
+    .reduce((sum, s) => sum + ((s.cost || 0) * getMonthlyFactor(s)), 0);
 
   const activeCount = liveSubscriptions.filter(s => s.status === 'actief').length;
   const filterSelectClass = "px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors hover:border-slate-300";

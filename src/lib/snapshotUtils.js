@@ -1,9 +1,25 @@
+// Factor formule: monthly = cost × (365/12) / dagen_in_periode
+// 'Anders' wordt dynamisch berekend uit start→renewal in factorForSub().
 const BILLING_FACTORS = {
-  'Maandelijks':  1,
-  'Per kwartaal': 1 / 3,
-  'Jaarlijks':    1 / 12,
-  'Eenmalig':     0,
+  'Maandelijks':   1,
+  'Wekelijks':     (365 / 12) / 7,
+  'Per kwartaal':  1 / 3,
+  'Halfjaarlijks': 1 / 6,
+  'Jaarlijks':     1 / 12,
+  'Eenmalig':      0,
 };
+
+function factorForSub(sub) {
+  if (sub.cost_period === 'Anders') {
+    if (!sub.start_date || !sub.renewal_date) return 0;
+    const start = new Date(sub.start_date);
+    const renewal = new Date(sub.renewal_date);
+    const days = (renewal - start) / (1000 * 60 * 60 * 24);
+    if (days <= 0) return 0;
+    return (365 / 12) / days;
+  }
+  return BILLING_FACTORS[sub.cost_period] ?? 1;
+}
 
 // Is een account actief tussen first en last dag van een maand?
 function isAccountActiveInRange(account, firstDay, lastDay) {
@@ -59,7 +75,7 @@ export async function backfillSubscriptionSnapshots(supabase, sub) {
     fxRate = rateRow?.rate ? parseFloat(rateRow.rate) : 1.0;
   }
 
-  const factor = BILLING_FACTORS[sub.cost_period] ?? 1;
+  const factor = factorForSub(sub);
   const parentCost = parseFloat(sub.cost) || 0;
   const baseCost = parseFloat(sub.base_cost) || 0;
 

@@ -1,9 +1,32 @@
+// Factor formule: monthly_equivalent = cost × (365/12) / dagen_in_periode
+// → maandelijks ≈ 30.4 dagen → 1.0; jaarlijks 365 → 1/12; etc.
+// 'Anders' heeft factor=null en wordt dynamisch berekend uit start_date + renewal_date
 export const BILLING_PERIODS = [
-  { value: 'Maandelijks',    label: 'Maandelijks',    factor: 1 },
-  { value: 'Per kwartaal',   label: 'Per kwartaal',   factor: 1 / 3 },
-  { value: 'Jaarlijks',      label: 'Jaarlijks',      factor: 1 / 12 },
-  { value: 'Eenmalig',       label: 'Eenmalig',       factor: 0 },
+  { value: 'Maandelijks',   label: 'Maandelijks',   factor: 1 },
+  { value: 'Wekelijks',     label: 'Wekelijks',     factor: (365 / 12) / 7 },
+  { value: 'Per kwartaal',  label: 'Per kwartaal',  factor: 1 / 3 },
+  { value: 'Halfjaarlijks', label: 'Halfjaarlijks', factor: 1 / 6 },
+  { value: 'Jaarlijks',     label: 'Jaarlijks',     factor: 1 / 12 },
+  { value: 'Eenmalig',      label: 'Eenmalig',      factor: 0 },
+  { value: 'Anders',        label: 'Anders…',       factor: null },
 ];
+
+// Dynamische factor: gebruikt vaste tabel voor bekende periodes, en berekent
+// uit start→renewal voor 'Anders'. Retourneert 0 bij ongeldige Anders-data
+// (geen dates, of renewal <= start).
+export function getMonthlyFactor(sub) {
+  if (!sub?.cost_period) return 1;
+  if (sub.cost_period === 'Anders') {
+    if (!sub.start_date || !sub.renewal_date) return 0;
+    const start = new Date(sub.start_date);
+    const renewal = new Date(sub.renewal_date);
+    const days = (renewal - start) / (1000 * 60 * 60 * 24);
+    if (days <= 0) return 0;
+    return (365 / 12) / days;
+  }
+  const match = BILLING_PERIODS.find(p => p.value === sub.cost_period);
+  return match?.factor ?? 1;
+}
 
 // Pricing model — afgeleid uit de bestaande velden. Eén bron van waarheid.
 export const BILLING_MODELS = [
@@ -111,7 +134,7 @@ export function toEurMonthly(sub, rates = {}) {
   const base = parseFloat(sub.base_cost) || 0;
   const totalPerPeriod = base + variable;
 
-  return toMonthly(totalPerPeriod, sub.cost_period) * fxRate;
+  return totalPerPeriod * getMonthlyFactor(sub) * fxRate;
 }
 
 // Voor historische berekening (specifieke maand): gebruik account-status in die maand
@@ -128,5 +151,5 @@ export function toEurMonthlyFor(sub, year, month, rates = {}) {
   const base = parseFloat(sub.base_cost) || 0;
   const totalPerPeriod = base + variable;
 
-  return toMonthly(totalPerPeriod, sub.cost_period) * fxRate;
+  return totalPerPeriod * getMonthlyFactor(sub) * fxRate;
 }
