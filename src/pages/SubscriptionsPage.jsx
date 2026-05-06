@@ -195,7 +195,7 @@ function SubRow({ sub, onView, showUrgency, isSelectable, isSelected, onToggleSe
             {(() => {
               const activeCount = hasAccounts ? countActiveAccountsNow(sub.accounts) : 0;
               const subtitle = hasAccounts
-                ? `${activeCount} actief account${activeCount !== 1 ? 's' : ''}`
+                ? `${activeCount} actieve account${activeCount !== 1 ? 's' : ''}`
                 : null;
               return (sub.vendor || subtitle) && (
                 <p className="text-xs text-slate-400 mt-0.5 truncate">
