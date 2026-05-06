@@ -5,7 +5,7 @@ import { useEvaluaties } from '../hooks/useEvaluaties';
 import { useSettings } from '../hooks/useSettings';
 import { format, addDays, isBefore } from 'date-fns';
 import { SubLogo } from '../components/SubLogo';
-import { toEurMonthly as calcEurMonthly } from '../lib/costUtils';
+import { toEurMonthly as calcEurMonthly, effectiveAutoRenew } from '../lib/costUtils';
 import { SubscriptionDetailPanel } from '../components/SubscriptionDetailPanel';
 import SubscriptionModal from '../components/SubscriptionModal';
 import {
@@ -362,8 +362,9 @@ function DashboardPage() {
 
   const isActiveInMonth = (sub, year, month) => {
     const monthStart = new Date(year, month, 1);
-    // Zonder auto-verlenging stopt het abonnement op de vervaldatum
-    if (!sub.auto_renew && sub.renewal_date && new Date(sub.renewal_date) < monthStart) return false;
+    // Zonder auto-verlenging stopt het abonnement op de vervaldatum.
+    // Bij per_account: kijk naar effectieve auto-renew (= minstens één account verlengt).
+    if (!effectiveAutoRenew(sub) && sub.renewal_date && new Date(sub.renewal_date) < monthStart) return false;
     return true;
   };
 
@@ -380,7 +381,8 @@ function DashboardPage() {
   const sixtyDays = addDays(now, 60);
   const expiringSoonList = activeSubs
     .filter(s => {
-      if (s.auto_renew) return false;
+      // Bij per_account: minstens één account auto-verlengt → niet 'verloopt binnenkort'
+      if (effectiveAutoRenew(s)) return false;
       return s.renewal_date && isBefore(new Date(s.renewal_date), sixtyDays);
     })
     .sort((a, b) => new Date(a.renewal_date) - new Date(b.renewal_date));

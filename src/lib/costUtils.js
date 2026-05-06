@@ -101,6 +101,17 @@ function activeAccountsInMonth(accounts, year, month) {
   return accounts.filter(a => isAccountActiveInRange(a, firstDay, lastDay));
 }
 
+// Effectieve auto-verlenging — bij per_account is parent.auto_renew altijd
+// false (geforceerd in dataToSave), dus we kijken naar de accounts. Een sub
+// 'verlengt' als minstens één actief account auto-verlengt. Voor andere
+// kostenmodellen gewoon parent.auto_renew.
+export function effectiveAutoRenew(sub) {
+  if (sub.accounts && sub.accounts.length > 0) {
+    return sub.accounts.some(a => !a.archived_at && a.auto_renew);
+  }
+  return !!sub.auto_renew;
+}
+
 // Filter: welke accounts zijn NU actief (UI badges, modal preview, lijst).
 // Strikter dan activeAccountsInMonth: zodra archived_at gezet is, telt het account
 // niet meer mee — ook al valt archived_at binnen de huidige maand. (Historische

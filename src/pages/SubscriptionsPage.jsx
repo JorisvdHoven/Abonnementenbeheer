@@ -12,7 +12,7 @@ import Modal from '../components/Modal';
 import BulkEditModal from '../components/BulkEditModal';
 import MultiSelect from '../components/MultiSelect';
 import { toast } from '../lib/toast';
-import { toMonthly, toEurMonthly, getMonthlyFactor, deriveRenewalDate, countActiveAccountsNow, getBillingModel, BILLING_MODELS, BILLING_MODEL_LABELS } from '../lib/costUtils';
+import { toMonthly, toEurMonthly, getMonthlyFactor, deriveRenewalDate, effectiveAutoRenew, countActiveAccountsNow, getBillingModel, BILLING_MODELS, BILLING_MODEL_LABELS } from '../lib/costUtils';
 import { formatDate, formatDateLong, currencySymbol } from '../lib/format';
 import {
   ChevronDownIcon,
@@ -111,16 +111,6 @@ function ExportModal({ count, onExport, onClose }) {
       </div>
     </Modal>
   );
-}
-
-// Effectieve auto-verlenging — bij per_account is parent.auto_renew altijd
-// false (geforceerd in dataToSave), dus we kijken naar de accounts. Een sub
-// 'verlengt' als minstens één actief account auto-verlengt.
-function effectiveAutoRenew(sub) {
-  if (sub.accounts && sub.accounts.length > 0) {
-    return sub.accounts.some(a => !a.archived_at && a.auto_renew);
-  }
-  return !!sub.auto_renew;
 }
 
 // Helper: actieve sub die binnen 30 dagen afloopt en NIET auto-verlengt.
