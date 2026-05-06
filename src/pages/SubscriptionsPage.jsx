@@ -11,7 +11,6 @@ import Modal from '../components/Modal';
 import BulkEditModal from '../components/BulkEditModal';
 import MultiSelect from '../components/MultiSelect';
 import { toast } from '../lib/toast';
-import { addDays, isBefore } from 'date-fns';
 import { toMonthly, toEurMonthly, getMonthlyFactor, countActiveAccountsNow, getBillingModel, BILLING_MODELS, BILLING_MODEL_LABELS } from '../lib/costUtils';
 import { formatDate, formatDateLong, currencySymbol } from '../lib/format';
 import {
@@ -113,11 +112,28 @@ function ExportModal({ count, onExport, onClose }) {
   );
 }
 
-function StatusBadge({ status }) {
+// Bepaalt of een sub binnen 30 dagen verloopt (en niet auto-verlengt).
+// Wordt gebruikt voor zowel het Verloopt-tab als de oranje status-pill.
+function isExpiringSoon(sub, now = new Date()) {
+  if (sub.status !== 'actief' || sub.auto_renew) return false;
+  if (!sub.renewal_date) return false;
+  const days = Math.ceil((new Date(sub.renewal_date) - now) / (1000 * 60 * 60 * 24));
+  return days >= 0 && days <= 30;
+}
+
+// Effectieve display-status: combineert sub.status met 'verloopt-binnenkort'-regel.
+// Levert 'expiring' op als actief + binnen 30 dagen + auto_renew=false.
+function effectiveStatus(sub, now = new Date()) {
+  if (sub.status === 'actief' && isExpiringSoon(sub, now)) return 'expiring';
+  return sub.status;
+}
+
+function StatusBadge({ status, daysLeft }) {
   const config = {
-    actief:   { dot: 'bg-green-500', text: 'text-slate-700', label: 'Actief' },
-    verlopen: { dot: 'bg-red-500',   text: 'text-slate-700', label: 'Verlopen' },
-    opgezegd: { dot: 'bg-slate-400', text: 'text-slate-500', label: 'Opgezegd' },
+    actief:   { dot: 'bg-green-500',  text: 'text-slate-700', label: 'Actief' },
+    expiring: { dot: 'bg-orange-500', text: 'text-orange-700', label: daysLeft != null ? `Verloopt ${daysLeft}d` : 'Verloopt' },
+    verlopen: { dot: 'bg-red-500',    text: 'text-slate-700', label: 'Verlopen' },
+    opgezegd: { dot: 'bg-slate-400',  text: 'text-slate-500', label: 'Opgezegd' },
   };
   const c = config[status] ?? config.opgezegd;
   return (
@@ -155,21 +171,79 @@ function CostDisplay({ sub }) {
   );
 }
 
-function DaysLeft({ date, urgent }) {
-  if (!date) return null;
-  const days = Math.ceil((new Date(date) - new Date()) / (1000 * 60 * 60 * 24));
-  if (days < 0) return <span className="text-xs text-red-500 font-medium">Verlopen</span>;
+// Status-tabs bovenaan de tabel. Default = 'actief'. 'alles' toont alles
+// in één tabel met een secondary-sort op status zodat actief/verloopt
+// altijd boven verlopen/opgezegd staat.
+function StatusTabs({ counts, value, onChange }) {
+  const tabs = [
+    { key: 'actief',   label: 'Actief',                accent: 'bg-green-500' },
+    { key: 'expiring', label: 'Verloopt < 30d',        accent: 'bg-orange-500' },
+    { key: 'verlopen', label: 'Verlopen',              accent: 'bg-red-500' },
+    { key: 'opgezegd', label: 'Opgezegd',              accent: 'bg-slate-400' },
+    { key: 'alles',    label: 'Alles',                 accent: null },
+  ];
   return (
-    <span className={`text-xs font-medium tabular-nums ${urgent ? 'text-orange-600' : 'text-slate-400'}`}>
-      nog {days}d
-    </span>
+    <div className="bg-white rounded-2xl border border-slate-200/70 p-1 flex flex-wrap gap-1">
+      {tabs.map(tab => {
+        const isActive = value === tab.key;
+        const count = counts[tab.key] ?? 0;
+        return (
+          <button
+            key={tab.key}
+            onClick={() => onChange(tab.key)}
+            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+              isActive
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            {tab.accent && (
+              <span className={`w-1.5 h-1.5 rounded-full ${tab.accent}`} />
+            )}
+            <span>{tab.label}</span>
+            <span className={`text-xs tabular-nums px-1.5 py-0.5 rounded-md ${
+              isActive ? 'bg-white/15' : 'bg-slate-100 text-slate-500'
+            }`}>
+              {count}
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
-function SubRow({ sub, onView, showUrgency, isSelectable, isSelected, onToggleSelect, isExpanded, onToggleExpand }) {
-  const renewalDate = sub.renewal_date;
-  const isUrgent = showUrgency && renewalDate;
+// Afgeleide vervaldatum voor display: als renewal_date null is maar
+// start_date + periode bekend, leiden we 'm af zodat de cel niet leeg is.
+// 'Eenmalig' / 'Anders' krijgen geen afgeleide waarde.
+function deriveRenewalDate(sub) {
+  if (sub.renewal_date) return sub.renewal_date;
+  if (!sub.start_date || !sub.cost_period) return null;
+  if (sub.cost_period === 'Eenmalig' || sub.cost_period === 'Anders') return null;
+  const PERIOD_MONTHS = { 'Maandelijks': 1, 'Per kwartaal': 3, 'Halfjaarlijks': 6, 'Jaarlijks': 12 };
+  const PERIOD_DAYS   = { 'Wekelijks': 7 };
+  const start = new Date(sub.start_date);
+  if (isNaN(start.getTime())) return null;
+  const now = new Date();
+  // Roll forward tot in de toekomst (eerstvolgende facturatie)
+  const next = new Date(start);
+  if (PERIOD_DAYS[sub.cost_period]) {
+    while (next < now) next.setDate(next.getDate() + PERIOD_DAYS[sub.cost_period]);
+  } else if (PERIOD_MONTHS[sub.cost_period]) {
+    while (next < now) next.setMonth(next.getMonth() + PERIOD_MONTHS[sub.cost_period]);
+  }
+  return next.toISOString().split('T')[0];
+}
+
+function SubRow({ sub, onView, isSelectable, isSelected, onToggleSelect, isExpanded, onToggleExpand }) {
+  // Toon-vervaldatum: bestaande renewal_date óf afgeleid uit start + periode
+  // zodat een leeg-DB-veld toch een logische waarde toont in de tabel.
+  const renewalDate = deriveRenewalDate(sub);
   const hasAccounts = sub.accounts?.length > 0;
+  const effStatus = effectiveStatus(sub);
+  const daysLeft = renewalDate
+    ? Math.ceil((new Date(renewalDate) - new Date()) / (1000 * 60 * 60 * 24))
+    : null;
   return (
     <tr
       onClick={() => onView(sub)}
@@ -241,25 +315,27 @@ function SubRow({ sub, onView, showUrgency, isSelectable, isSelected, onToggleSe
         {renewalDate ? (
           <div className="flex items-center gap-2">
             <span className="text-sm text-slate-700 tabular-nums">{formatDateLong(renewalDate)}</span>
-            {isUrgent && <DaysLeft date={renewalDate} urgent={true} />}
+            {sub.auto_renew && (
+              <span title="Auto-verlenging aan" className="text-primary text-base font-semibold leading-none">↻</span>
+            )}
           </div>
         ) : (
           <span className="text-slate-300 text-xs">—</span>
         )}
       </td>
       <td className="px-5 py-3 hidden sm:table-cell">
-        <StatusBadge status={sub.status} />
+        <StatusBadge status={effStatus} daysLeft={effStatus === 'expiring' ? daysLeft : null} />
       </td>
     </tr>
   );
 }
 
 const COLUMNS = [
-  { key: 'name',         label: 'Naam',            className: '' },
-  { key: 'category',     label: 'Afdeling',        className: 'hidden md:table-cell' },
-  { key: 'cost',         label: 'Kosten',          className: '' },
-  { key: 'renewal_date', label: 'Vervaldatum',     className: 'hidden lg:table-cell' },
-  { key: 'status',       label: 'Status',          className: 'hidden sm:table-cell' },
+  { key: 'name',         label: 'Naam',                  className: '' },
+  { key: 'category',     label: 'Afdeling',              className: 'hidden md:table-cell' },
+  { key: 'cost',         label: 'Kosten',                className: '' },
+  { key: 'renewal_date', label: 'Volgende facturatie',   className: 'hidden lg:table-cell' },
+  { key: 'status',       label: 'Status',                className: 'hidden sm:table-cell' },
 ];
 
 // Eén rij per account in de uitgeklapte sectie — uitgelijnd met de
@@ -316,10 +392,18 @@ function AccountExpandedRow({ acc, sub, isSelectable, isLast }) {
   );
 }
 
-function Section({ title, rows, onView, showUrgency, accent, isSelectable, selected, onToggleSelect, onToggleAll }) {
-  const [open, setOpen] = useState(true);
-  const [sortKey, setSortKey] = useState(null);
-  const [sortDir, setSortDir] = useState('asc');
+// Volgorde van statussen voor secondary-sort bij 'Alles'-tab.
+// Actief eerst, dan verloopt-binnenkort, dan verlopen, dan opgezegd.
+const STATUS_ORDER = { actief: 0, expiring: 1, verlopen: 2, opgezegd: 3 };
+
+// Hoofd-tabel — één flat lijst, geen secties. Default sort op kosten ↓.
+// Bij 'alles' wordt secondary-sort op effectiveStatus toegepast zodat
+// actieve subs altijd boven verlopen/opgezegde komen, ongeacht de
+// gekozen primary sort.
+function SubscriptionsTable({ rows, onView, isSelectable, selected, onToggleSelect, onToggleAll, isAllesTab }) {
+  // Default sort: kosten hoog → laag
+  const [sortKey, setSortKey] = useState('cost');
+  const [sortDir, setSortDir] = useState('desc');
   const [expandedSubs, setExpandedSubs] = useState(new Set());
 
   const toggleExpanded = (id) => {
@@ -333,16 +417,22 @@ function Section({ title, rows, onView, showUrgency, accent, isSelectable, selec
 
   const handleSort = (key) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setSortKey(key); setSortDir('asc'); }
+    else { setSortKey(key); setSortDir(key === 'cost' ? 'desc' : 'asc'); }
   };
 
   const getSortVal = (sub, key) => {
     if (key === 'cost') return (sub.cost || 0) * getMonthlyFactor(sub);
-    if (key === 'renewal_date') return sub.renewal_date || null;
+    if (key === 'renewal_date') return deriveRenewalDate(sub) || null;
     return sub[key] ?? null;
   };
 
-  const sorted = sortKey ? [...rows].sort((a, b) => {
+  const sorted = [...rows].sort((a, b) => {
+    // Secondary-sort op status bij 'Alles'-tab: actief > expiring > verlopen > opgezegd
+    if (isAllesTab) {
+      const aRank = STATUS_ORDER[effectiveStatus(a)] ?? 99;
+      const bRank = STATUS_ORDER[effectiveStatus(b)] ?? 99;
+      if (aRank !== bRank) return aRank - bRank;
+    }
     const aVal = getSortVal(a, sortKey);
     const bVal = getSortVal(b, sortKey);
     if (aVal === null && bVal === null) return 0;
@@ -352,103 +442,89 @@ function Section({ title, rows, onView, showUrgency, accent, isSelectable, selec
     return sortDir === 'asc'
       ? String(aVal).localeCompare(String(bVal), 'nl')
       : String(bVal).localeCompare(String(aVal), 'nl');
-  }) : rows;
+  });
+
+  if (rows.length === 0) {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-200/70 p-12 text-center">
+        <p className="text-sm text-slate-400">Geen abonnementen in deze view.</p>
+      </div>
+    );
+  }
 
   return (
-    <div className={`bg-white rounded-2xl border ${accent === 'orange' ? 'border-orange-200/80' : 'border-slate-200/70'} overflow-hidden`}>
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-50/60 transition-colors group"
-      >
-        <div className="flex items-center gap-2.5">
-          {accent === 'orange' && <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />}
-          <span className="font-semibold text-slate-900">{title}</span>
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full tabular-nums ${
-            accent === 'orange' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600'
-          }`}>{rows.length}</span>
-        </div>
-        <ChevronDownIcon className={`h-4 w-4 text-slate-400 group-hover:text-slate-600 transition-all ${open ? '' : '-rotate-90'}`} />
-      </button>
-      {open && (
-        <div className="border-t border-slate-100">
-          {rows.length === 0 ? (
-            <p className="px-5 py-6 text-sm text-slate-400 text-center">Niets in deze categorie.</p>
-          ) : (
-            <table className="w-full text-sm table-fixed">
-              <colgroup>
-                {isSelectable && <col style={{ width: '40px' }} />}
-                <col style={{ width: '32%' }} />
-                <col className="hidden md:table-column" style={{ width: '20%' }} />
-                <col style={{ width: '16%' }} />
-                <col className="hidden lg:table-column" style={{ width: '22%' }} />
-                <col className="hidden sm:table-column" style={{ width: '10%' }} />
-              </colgroup>
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/40">
-                  {isSelectable && (
-                    <th className="pl-5 py-2.5">
-                      <input
-                        type="checkbox"
-                        checked={rows.length > 0 && rows.every(r => selected.has(r.id))}
-                        onChange={() => onToggleAll(rows.map(r => r.id))}
-                        className="rounded border-slate-300 text-primary focus:ring-primary/30 cursor-pointer"
-                        aria-label="Alles in deze sectie selecteren"
-                      />
-                    </th>
-                  )}
-                  {COLUMNS.map(col => {
-                    const active = sortKey === col.key;
-                    const SortIcon = active ? (sortDir === 'asc' ? ArrowUpIcon : ArrowDownIcon) : ChevronUpDownIcon;
-                    return (
-                      <th
-                        key={col.key}
-                        onClick={() => handleSort(col.key)}
-                        className={`px-5 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider cursor-pointer select-none transition-colors ${active ? 'text-slate-700' : 'text-slate-400 hover:text-slate-600'} ${col.className}`}
-                      >
-                        <span className="inline-flex items-center gap-1">
-                          {col.label}
-                          <SortIcon className={`h-3 w-3 ${active ? 'text-primary' : 'opacity-40'}`} />
-                        </span>
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {sorted.map(sub => {
-                  const isExpanded = expandedSubs.has(sub.id);
-                  const liveAccounts = isExpanded
-                    ? (sub.accounts || []).filter(a => !a.archived_at)
-                    : [];
-                  return (
-                    <Fragment key={sub.id}>
-                      <SubRow
-                        sub={sub}
-                        onView={onView}
-                        showUrgency={showUrgency}
-                        isSelectable={isSelectable}
-                        isSelected={selected?.has(sub.id) ?? false}
-                        onToggleSelect={onToggleSelect}
-                        isExpanded={isExpanded}
-                        onToggleExpand={toggleExpanded}
-                      />
-                      {isExpanded && liveAccounts.map((acc, idx) => (
-                        <AccountExpandedRow
-                          key={acc.id || acc._tempId}
-                          acc={acc}
-                          sub={sub}
-                          isSelectable={isSelectable}
-                          isLast={idx === liveAccounts.length - 1}
-                        />
-                      ))}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
+    <div className="bg-white rounded-2xl border border-slate-200/70 overflow-hidden">
+      <table className="w-full text-sm table-fixed">
+        <colgroup>
+          {isSelectable && <col style={{ width: '40px' }} />}
+          <col style={{ width: '32%' }} />
+          <col className="hidden md:table-column" style={{ width: '20%' }} />
+          <col style={{ width: '16%' }} />
+          <col className="hidden lg:table-column" style={{ width: '22%' }} />
+          <col className="hidden sm:table-column" style={{ width: '10%' }} />
+        </colgroup>
+        <thead>
+          <tr className="border-b border-slate-100 bg-slate-50/40">
+            {isSelectable && (
+              <th className="pl-5 py-2.5">
+                <input
+                  type="checkbox"
+                  checked={rows.length > 0 && rows.every(r => selected.has(r.id))}
+                  onChange={() => onToggleAll(rows.map(r => r.id))}
+                  className="rounded border-slate-300 text-primary focus:ring-primary/30 cursor-pointer"
+                  aria-label="Alle zichtbare abonnementen selecteren"
+                />
+              </th>
+            )}
+            {COLUMNS.map(col => {
+              const active = sortKey === col.key;
+              const SortIcon = active ? (sortDir === 'asc' ? ArrowUpIcon : ArrowDownIcon) : ChevronUpDownIcon;
+              return (
+                <th
+                  key={col.key}
+                  onClick={() => handleSort(col.key)}
+                  className={`px-5 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider cursor-pointer select-none transition-colors ${active ? 'text-slate-700' : 'text-slate-400 hover:text-slate-600'} ${col.className}`}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    {col.label}
+                    <SortIcon className={`h-3 w-3 ${active ? 'text-primary' : 'opacity-40'}`} />
+                  </span>
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map(sub => {
+            const isExpanded = expandedSubs.has(sub.id);
+            const liveAccounts = isExpanded
+              ? (sub.accounts || []).filter(a => !a.archived_at)
+              : [];
+            return (
+              <Fragment key={sub.id}>
+                <SubRow
+                  sub={sub}
+                  onView={onView}
+                  isSelectable={isSelectable}
+                  isSelected={selected?.has(sub.id) ?? false}
+                  onToggleSelect={onToggleSelect}
+                  isExpanded={isExpanded}
+                  onToggleExpand={toggleExpanded}
+                />
+                {isExpanded && liveAccounts.map((acc, idx) => (
+                  <AccountExpandedRow
+                    key={acc.id || acc._tempId}
+                    acc={acc}
+                    sub={sub}
+                    isSelectable={isSelectable}
+                    isLast={idx === liveAccounts.length - 1}
+                  />
+                ))}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -535,6 +611,7 @@ function SubscriptionsPage() {
   const { subscriptions, loading, addSubscription, updateSubscription, deleteSubscription, restoreSubscription, permanentlyDeleteSubscription, refetch } = useSubscriptions();
   const { categories: settingCategories, types, departments: settingDepartments, addCategory, addType, addDepartment } = useSettings();
   const { isAdmin } = useCurrentUser();
+  const [statusTab, setStatusTab] = useState('actief'); // 'actief' | 'expiring' | 'verlopen' | 'opgezegd' | 'alles'
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 250);
   const [categoryFilter, setCategoryFilter] = useState(new Set());
@@ -622,8 +699,6 @@ function SubscriptionsPage() {
       && (departmentFilter.size === 0 || departmentFilter.has(sub.department));
   });
 
-  const now = new Date();
-  const soon = addDays(now, 60);
   // Splits eerst: actieve (niet gearchiveerd) versus archief
   const liveSubscriptions = subscriptions.filter(s => !s.archived_at);
   const archivedSubscriptions = subscriptions.filter(s => s.archived_at);
@@ -631,14 +706,23 @@ function SubscriptionsPage() {
   const filtered = applyFilters(liveSubscriptions);
   const filteredArchived = applyFilters(archivedSubscriptions);
 
-  const expiringSoon = filtered.filter(s => {
-    if (s.status !== 'actief' || s.auto_renew) return false;
-    return s.renewal_date && isBefore(new Date(s.renewal_date), soon);
-  });
-  const expiringSoonIds = new Set(expiringSoon.map(s => s.id));
-  const actief   = filtered.filter(s => s.status === 'actief' && !expiringSoonIds.has(s.id));
-  const verlopen = filtered.filter(s => s.status === 'verlopen');
-  const opgezegd = filtered.filter(s => s.status === 'opgezegd');
+  // Counts per status-tab — gebaseerd op `filtered` (dus respect andere filters
+  // zoals afdeling/categorie/zoek). 'expiring' is een sub-set van actief.
+  const tabCounts = {
+    actief:   filtered.filter(s => effectiveStatus(s) === 'actief').length,
+    expiring: filtered.filter(s => effectiveStatus(s) === 'expiring').length,
+    verlopen: filtered.filter(s => s.status === 'verlopen').length,
+    opgezegd: filtered.filter(s => s.status === 'opgezegd').length,
+    alles:    filtered.length,
+  };
+
+  // Rij-set die getoond wordt — gefilterd op de actieve tab.
+  const tabFilteredRows = (() => {
+    if (statusTab === 'alles')    return filtered;
+    if (statusTab === 'expiring') return filtered.filter(s => effectiveStatus(s) === 'expiring');
+    if (statusTab === 'actief')   return filtered.filter(s => effectiveStatus(s) === 'actief');
+    return filtered.filter(s => s.status === statusTab); // verlopen / opgezegd
+  })();
 
   const handleView   = (sub) => setDetailSub(sub);
   const handleEdit   = (sub) => { setDetailSub(null); setEditingSub(sub); setModalOpen(true); };
@@ -807,16 +891,21 @@ function SubscriptionsPage() {
         </div>
       ) : (
         <>
-          {expiringSoon.length > 0 && (
-            <Section title="Verloopt binnenkort" rows={expiringSoon} onView={handleView} showUrgency accent="orange"
-              isSelectable={isAdmin} selected={selected} onToggleSelect={toggleSelect} onToggleAll={toggleSelectMany} />
-          )}
-          <Section title="Actief" rows={actief} onView={handleView}
-            isSelectable={isAdmin} selected={selected} onToggleSelect={toggleSelect} onToggleAll={toggleSelectMany} />
-          <Section title="Verlopen" rows={verlopen} onView={handleView}
-            isSelectable={isAdmin} selected={selected} onToggleSelect={toggleSelect} onToggleAll={toggleSelectMany} />
-          <Section title="Opgezegd" rows={opgezegd} onView={handleView}
-            isSelectable={isAdmin} selected={selected} onToggleSelect={toggleSelect} onToggleAll={toggleSelectMany} />
+          {/* Status-tabs bovenaan — wisselen tussen status-filtered views */}
+          <StatusTabs counts={tabCounts} value={statusTab} onChange={setStatusTab} />
+
+          {/* Hoofd-tabel — flat lijst gefilterd op actieve tab */}
+          <SubscriptionsTable
+            rows={tabFilteredRows}
+            onView={handleView}
+            isSelectable={isAdmin}
+            selected={selected}
+            onToggleSelect={toggleSelect}
+            onToggleAll={toggleSelectMany}
+            isAllesTab={statusTab === 'alles'}
+          />
+
+          {/* Archief — collapsable, blijft onderaan */}
           {isAdmin && (
             <div id="archief">
               <ArchiveSection
