@@ -330,10 +330,15 @@ const COLUMNS = [
 function AccountExpandedRow({ acc, sub, isSelectable, isLast, onView }) {
   const sym = currencySymbol(sub.currency);
 
-  // Effectieve waardes (fallback op parent indien account-veld leeg)
+  // Effectieve waardes (fallback op parent indien account-veld leeg).
+  // Voor 'end' eerst acc.end_date, anders afleiden uit account's eigen start
+  // + periode, anders parent's afgeleide datum — zodat een leeg-DB-veld
+  // toch een logische einddatum toont (zelfde patroon als de hoofdrij).
   const period = acc.cost_period || sub.cost_period;
   const start = acc.start_date || sub.start_date;
-  const end = acc.end_date || sub.renewal_date;
+  const end = acc.end_date
+    || deriveRenewalDate({ start_date: start, cost_period: period })
+    || deriveRenewalDate(sub);
   const cost = (acc.cost !== null && acc.cost !== undefined && acc.cost !== '')
     ? parseFloat(acc.cost) || 0
     : parseFloat(sub.cost) || 0;

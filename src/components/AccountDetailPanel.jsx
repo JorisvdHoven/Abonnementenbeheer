@@ -52,10 +52,15 @@ export function AccountDetailPanel({ account, sub, onClose, onEditParent }) {
   const sym = currencySymbol(sub.currency);
   const fmt = (v) => v.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  // Effectieve waardes (account-eigen of inherit van parent)
+  // Effectieve waardes (account-eigen of inherit van parent).
+  // endDate: account.end_date eerst, anders afleiden uit account's eigen
+  // start + periode, anders parent's afgeleide datum — zo krijgt een sub
+  // met auto_renew=true en lege end_date toch een correcte einddatum.
   const period      = account.cost_period || sub.cost_period;
   const startDate   = account.start_date || sub.start_date;
-  const endDate     = account.end_date   || deriveRenewalDate(sub);
+  const endDate     = account.end_date
+    || deriveRenewalDate({ start_date: startDate, cost_period: period })
+    || deriveRenewalDate(sub);
   const isCustomCost = account.cost !== null && account.cost !== undefined && account.cost !== '';
   const cost = isCustomCost ? parseFloat(account.cost) : parseFloat(sub.cost) || 0;
 

@@ -64,10 +64,16 @@ function StatusIndicator({ status }) {
 }
 
 // Account row binnen de Accounts sectie
-function AccountRow({ acc, parentCost, parentPeriod, currency, onView }) {
+function AccountRow({ acc, parentCost, parentPeriod, parentStart, parentRenewal, currency, onView }) {
   const today = new Date();
-  const start = acc.start_date ? new Date(acc.start_date) : null;
-  const end = acc.end_date ? new Date(acc.end_date) : null;
+  // Effectieve datums: account's eigen, anders parent's, anders afgeleid
+  const startEffective = acc.start_date || parentStart;
+  const periodEffective = acc.cost_period || parentPeriod;
+  const endEffective = acc.end_date
+    || deriveRenewalDate({ start_date: startEffective, cost_period: periodEffective })
+    || parentRenewal;
+  const start = startEffective ? new Date(startEffective) : null;
+  const end = endEffective ? new Date(endEffective) : null;
   const isArchived = !!acc.archived_at;
   // Met auto_renew aan: cron houdt end_date in de toekomst, dus altijd actief vanaf start
   const isActive = !isArchived
@@ -101,13 +107,10 @@ function AccountRow({ acc, parentCost, parentPeriod, currency, onView }) {
           )}
         </p>
         <p className="text-xs text-slate-400 mt-0.5 tabular-nums">
-          {(() => {
-            const period = acc.cost_period || parentPeriod;
-            return period ? <><span className="not-tabular-nums">{period}</span> · </> : null;
-          })()}
-          {acc.start_date ? formatDate(acc.start_date) : '?'}
+          {periodEffective ? <><span className="not-tabular-nums">{periodEffective}</span> · </> : null}
+          {startEffective ? formatDate(startEffective) : '?'}
           {' → '}
-          {acc.end_date ? formatDate(acc.end_date) : '∞'}
+          {endEffective ? formatDate(endEffective) : '∞'}
         </p>
       </div>
       <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
@@ -285,6 +288,8 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete, onView
                     acc={acc}
                     parentCost={sub.cost}
                     parentPeriod={sub.cost_period}
+                    parentStart={sub.start_date}
+                    parentRenewal={deriveRenewalDate(sub)}
                     currency={sub.currency}
                     onView={onViewAccount ? (a) => onViewAccount(a, sub) : undefined}
                   />
