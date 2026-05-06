@@ -2,6 +2,18 @@ import { useEffect } from 'react';
 import { XMarkIcon, PencilSquareIcon, TrashIcon, DocumentArrowDownIcon } from '@heroicons/react/24/outline';
 import { SubLogo } from './SubLogo';
 import { AccountAvatar } from './AccountAvatar';
+
+// Natuurlijke NL-preposition per facturatieperiode.
+// Maandelijks/Jaarlijks: null — die zijn al getoond als "/mnd" en "per jaar".
+// Eenmalig/Anders: null — geen "per X" semantiek.
+function periodLabel(period) {
+  switch (period) {
+    case 'Wekelijks':     return 'week';
+    case 'Per kwartaal':  return 'kwartaal';
+    case 'Halfjaarlijks': return 'half jaar';
+    default:              return null;
+  }
+}
 import { toMonthly, getMonthlyFactor, countActiveAccountsNow, activeAccountsNow, getBillingModel, BILLING_MODEL_LABELS } from '../lib/costUtils';
 import { formatDate, formatDateLong, currencySymbol } from '../lib/format';
 import { useCurrentUser } from '../hooks/useCurrentUser';
@@ -204,8 +216,8 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
             <p className="text-xs text-slate-500 mt-2 tabular-nums">
               {isVariable && '± '}
               {sym}{fmtAmount(monthly * 12)} per jaar
-              {sub.cost_period && sub.cost_period !== 'Maandelijks' && (
-                <> · {isVariable && '± '}{sym}{fmtAmount(perPeriodTotal)} per {sub.cost_period.toLowerCase()}</>
+              {periodLabel(sub.cost_period) && (
+                <> · {isVariable && '± '}{sym}{fmtAmount(perPeriodTotal)} per {periodLabel(sub.cost_period)}</>
               )}
             </p>
             {baseCost > 0 && (
@@ -213,8 +225,8 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
                 <span className="text-slate-400">{sym}{fmtAmount(baseCost)} licentie</span>
                 <span className="mx-1.5 text-slate-300">+</span>
                 <span className="text-slate-400">{isVariable ? '± ' : ''}{sym}{fmtAmount(variablePerPeriod)} {isVariable ? 'verbruik' : 'variabel'}</span>
-                {sub.cost_period && sub.cost_period !== 'Maandelijks' && (
-                  <span className="text-slate-400"> per {sub.cost_period.toLowerCase()}</span>
+                {periodLabel(sub.cost_period) && (
+                  <span className="text-slate-400"> per {periodLabel(sub.cost_period)}</span>
                 )}
               </p>
             )}
