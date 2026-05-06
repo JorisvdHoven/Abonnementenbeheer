@@ -12,7 +12,13 @@ export function SubLogo({ vendor, name, size = 'sm' }) {
   const initial = (name || vendor || '?')[0].toUpperCase();
   const [srcIndex, setSrcIndex] = useState(0);
   useEffect(() => setSrcIndex(0), [name, vendor]);
-  const sizeClass = size === 'lg' ? 'h-12 w-12 text-lg' : size === 'xl' ? 'h-16 w-16 text-2xl' : 'h-8 w-8 text-xs';
+  const sizeClass = size === 'xs'
+    ? 'h-5 w-5 text-[10px]'
+    : size === 'lg'
+    ? 'h-12 w-12 text-lg'
+    : size === 'xl'
+    ? 'h-16 w-16 text-2xl'
+    : 'h-8 w-8 text-xs';
 
   const nameDomain = toDomain(name);
   const vendorDomain = toDomain(vendor);

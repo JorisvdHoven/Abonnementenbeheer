@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { AccountAvatar } from './AccountAvatar';
+import { SubLogo } from './SubLogo';
 import { getMonthlyFactor, deriveRenewalDate } from '../lib/costUtils';
 import { formatDate, currencySymbol } from '../lib/format';
 
@@ -93,8 +94,12 @@ export function AccountDetailPanel({ account, sub, onClose }) {
           <h2 className="text-2xl font-bold text-slate-900 truncate">
             {account.owner_name || <span className="italic text-slate-400">Zonder naam</span>}
           </h2>
-          <div className="flex items-center gap-2 mt-1 text-sm">
-            <span className="text-slate-500 truncate">Account van {sub.name}</span>
+          <div className="flex items-center gap-2 mt-1.5 text-sm">
+            <span className="text-slate-500">Account onder</span>
+            <span className="inline-flex items-center gap-1.5 min-w-0">
+              <SubLogo vendor={sub.vendor} name={sub.name} size="xs" />
+              <span className="text-slate-700 font-medium truncate">{sub.name}</span>
+            </span>
             <span className="text-slate-300">·</span>
             <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
               <span className={`w-1.5 h-1.5 rounded-full ${stateDot}`} />
