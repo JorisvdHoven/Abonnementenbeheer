@@ -112,25 +112,32 @@ function ExportModal({ count, onExport, onClose }) {
   );
 }
 
-// Status-pill — combineert sub.status met auto_renew tot 4 varianten.
-// Sub.status zelf blijft DB-niveau gewoon actief/verlopen/opgezegd, maar
-// 'actief' splitst hier visueel in Actief (auto-verlengend) en Actief loopt af
-// (geen auto-verlenging — stopt op einddatum).
+// Helper: actieve sub die binnen 30 dagen afloopt en NIET auto-verlengt.
+// De oranje "Actief loopt af" is alleen voor deze urgente categorie.
+function isActiefLooptAf(sub) {
+  if (sub.status !== 'actief' || sub.auto_renew) return false;
+  const renewal = deriveRenewalDate(sub);
+  if (!renewal) return false;
+  const days = Math.ceil((new Date(renewal) - new Date()) / (1000 * 60 * 60 * 24));
+  return days >= 0 && days <= 30;
+}
+
+// Status-pill — combineert sub.status met auto_renew + tijdsdruk tot 4 varianten.
 //
-//   actief + auto_renew=true   → "Actief"           groen
-//   actief + auto_renew=false  → "Actief loopt af"  oranje
-//   verlopen                    → "Verlopen"         rood
-//   opgezegd                    → "Opgezegd"         slate
+//   actief + (auto_renew of > 30d weg)     → "Actief"           groen
+//   actief + auto_renew=false + ≤ 30d      → "Actief loopt af"  oranje
+//   verlopen                                → "Verlopen"         rood
+//   opgezegd                                → "Opgezegd"         slate
 function StatusBadge({ sub }) {
   let dot, text, label;
   if (sub.status === 'verlopen') {
     [dot, text, label] = ['bg-red-500', 'text-slate-700', 'Verlopen'];
   } else if (sub.status === 'opgezegd') {
     [dot, text, label] = ['bg-slate-400', 'text-slate-500', 'Opgezegd'];
-  } else if (sub.auto_renew) {
-    [dot, text, label] = ['bg-green-500', 'text-slate-700', 'Actief'];
-  } else {
+  } else if (isActiefLooptAf(sub)) {
     [dot, text, label] = ['bg-orange-500', 'text-orange-700', 'Actief loopt af'];
+  } else {
+    [dot, text, label] = ['bg-green-500', 'text-slate-700', 'Actief'];
   }
   return (
     <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${text}`}>
@@ -140,12 +147,13 @@ function StatusBadge({ sub }) {
   );
 }
 
-// Sort-rank voor Status-kolom: actief eerst, dan actief-loopt-af,
-// dan verlopen, dan opgezegd.
+// Sort-rank voor Status-kolom: urgentie eerst, dan actief, dan inactief.
+// 'Actief loopt af' staat boven gewoon Actief omdat het aandacht nodig heeft.
 function statusRank(sub) {
-  if (sub.status === 'verlopen') return 2;
-  if (sub.status === 'opgezegd') return 3;
-  return sub.auto_renew ? 0 : 1;
+  if (sub.status === 'verlopen') return 3;
+  if (sub.status === 'opgezegd') return 4;
+  if (isActiefLooptAf(sub)) return 0;
+  return 1;
 }
 
 function CostDisplay({ sub }) {
