@@ -104,6 +104,46 @@ const inputClass = 'block w-full px-3 py-2 rounded-md border border-slate-200 bg
 const inputClassError = 'block w-full px-3 py-2 rounded-md border border-red-300 bg-red-50/40 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-400 transition-colors';
 
 // ============================================================
+// Datum-helpers (module-scope zodat AccountsManager ze ook kan gebruiken)
+// ============================================================
+
+function addMonthsSafe(isoDate, months) {
+  if (!isoDate) return '';
+  const d = new Date(isoDate);
+  if (isNaN(d.getTime())) return '';
+  const day = d.getDate();
+  d.setMonth(d.getMonth() + months);
+  if (d.getDate() < day) d.setDate(0); // 31 jan + 1 mnd → 28/29 feb i.p.v. 3 mrt
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function addDaysSafe(isoDate, days) {
+  if (!isoDate) return '';
+  const d = new Date(isoDate);
+  if (isNaN(d.getTime())) return '';
+  d.setDate(d.getDate() + days);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+const PERIOD_MONTHS = { 'Maandelijks': 1, 'Per kwartaal': 3, 'Halfjaarlijks': 6, 'Jaarlijks': 12 };
+
+// Auto-fill van renewal/end date op basis van startdatum + facturatieperiode.
+// 'Eenmalig' en 'Anders' krijgen geen auto-berekende waarde — Anders = handmatig.
+function computeRenewalDate(startDate, period) {
+  if (!startDate) return '';
+  if (period === 'Wekelijks') return addDaysSafe(startDate, 7);
+  const months = PERIOD_MONTHS[period];
+  if (!months) return '';
+  return addMonthsSafe(startDate, months);
+}
+
+// ============================================================
 // AddableSelect — combobox met inline "+ toevoegen"
 // ============================================================
 
@@ -164,19 +204,54 @@ function AddableSelect({ label, value, options, onChange, onAdd, error, required
 function AccountsManager({ accounts, onChange, defaultCost, currency, period, parentStartDate, parentRenewalDate }) {
   const [showArchive, setShowArchive] = useState(false);
 
-  // Bij toevoegen: nieuwe account erft parent's start, vervaldatum en
-  // krijgt auto-verlenging aan (meest gebruikelijke default voor lopende
-  // abonnementen). Per veld nog vrij aanpasbaar in de rij erna.
+  // Bij toevoegen: nieuwe account erft parent's start, vervaldatum, periode
+  // en krijgt auto-verlenging aan (gebruikelijke default voor lopende abo's).
   const addAccount = () => {
     onChange([...accounts, {
       _tempId: crypto.randomUUID(),
       owner_name: '',
       start_date: parentStartDate || '',
       end_date: parentRenewalDate || '',
+      cost_period: period || '',
       auto_renew: true,
       cost: '',
       archived_at: null,
     }]);
+  };
+
+  // Bij wijzigen van account-periode: auto-fill end_date (alleen als de huidige
+  // end_date nog matched met de oude auto-fill of leeg is). Bij Anders: niet
+  // auto-fillen, gebruiker vult zelf in. Bij Eenmalig: end_date leeg.
+  const updateAccountPeriod = (key, newPeriod) => {
+    onChange(accounts.map(a => {
+      if (keyOf(a) !== key) return a;
+      const next = { ...a, cost_period: newPeriod };
+      if (newPeriod === 'Eenmalig') {
+        next.end_date = '';
+        next.auto_renew = false;
+      } else if (newPeriod === 'Anders') {
+        // end_date blijft staan; gebruiker overschrijft handmatig
+      } else if (a.start_date) {
+        // Auto-bereken op basis van start + nieuwe periode
+        const computed = computeRenewalDate(a.start_date, newPeriod);
+        if (computed) next.end_date = computed;
+      }
+      return next;
+    }));
+  };
+
+  const updateAccountStart = (key, newStart) => {
+    onChange(accounts.map(a => {
+      if (keyOf(a) !== key) return a;
+      const next = { ...a, start_date: newStart };
+      // Bij standaard periode: end_date herberekenen op basis van nieuwe start
+      const period = a.cost_period;
+      if (newStart && period && period !== 'Anders' && period !== 'Eenmalig') {
+        const computed = computeRenewalDate(newStart, period);
+        if (computed) next.end_date = computed;
+      }
+      return next;
+    }));
   };
 
   // Operate on accounts via stable key (id voor bestaande, _tempId voor nieuwe)
@@ -254,9 +329,9 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period, pa
               {activeAccounts.map((account, idx) => {
                 const key = keyOf(account);
                 return (
+                  <div key={key} className="relative">
                   <div
-                    key={key}
-                    className="relative p-3 grid grid-cols-1 sm:grid-cols-[1fr,140px,180px,140px,auto] gap-2 items-end"
+                    className="p-3 grid grid-cols-1 sm:grid-cols-[1fr,140px,180px,140px,auto] gap-2 items-end"
                   >
                     {/* Mobile-only header: account-nummer + archive-knop */}
                     <div className="sm:hidden flex items-center justify-between -mb-1">
@@ -288,29 +363,36 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period, pa
                       <input
                         type="date"
                         value={account.start_date || ''}
-                        onChange={(e) => updateByKey(key, { start_date: e.target.value })}
+                        onChange={(e) => updateAccountStart(key, e.target.value)}
                         className={inputClass}
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-slate-500 mb-1">Vervaldatum</label>
+                      <label className="block text-xs text-slate-500 mb-1">Facturatieperiode</label>
                       <div className="flex gap-1.5">
-                        <input
-                          type="date"
-                          value={account.end_date || ''}
-                          onChange={(e) => updateByKey(key, { end_date: e.target.value })}
+                        <select
+                          value={account.cost_period || ''}
+                          onChange={(e) => updateAccountPeriod(key, e.target.value)}
                           className={`flex-1 min-w-0 ${inputClass}`}
-                        />
+                        >
+                          <option value="">Default ({period || 'parent'})</option>
+                          {BILLING_PERIODS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                        </select>
                         <button
                           type="button"
                           onClick={() => updateByKey(key, { auto_renew: !account.auto_renew })}
-                          title={account.auto_renew
-                            ? 'Auto-verlenging aan — vervaldatum schuift automatisch door'
-                            : 'Auto-verlenging uit — account stopt op vervaldatum'}
+                          disabled={account.cost_period === 'Eenmalig'}
+                          title={account.cost_period === 'Eenmalig'
+                            ? 'Niet van toepassing bij eenmalig'
+                            : (account.auto_renew
+                                ? 'Auto-verlenging aan — vervaldatum schuift automatisch door'
+                                : 'Auto-verlenging uit — account stopt op vervaldatum')}
                           className={`flex-shrink-0 h-9 w-9 inline-flex items-center justify-center rounded-md text-base font-semibold transition-all ${
-                            account.auto_renew
-                              ? 'bg-primary/15 text-primary hover:bg-primary/20'
-                              : 'bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600'
+                            account.cost_period === 'Eenmalig'
+                              ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                              : account.auto_renew
+                                ? 'bg-primary/15 text-primary hover:bg-primary/20'
+                                : 'bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600'
                           }`}
                           aria-label={account.auto_renew ? 'Auto-verlenging aan' : 'Auto-verlenging uit'}
                         >
@@ -344,6 +426,27 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period, pa
                     >
                       <TrashIcon className="h-4 w-4" />
                     </button>
+                  </div>
+                  {/* Extra Vervaldatum-veld bij periode 'Anders' — onder de hoofd-rij */}
+                  {account.cost_period === 'Anders' && (
+                    <div className="px-3 pb-3 -mt-1">
+                      <label className="block text-xs text-slate-500 mb-1">
+                        Vervaldatum
+                        <span className={account.end_date ? 'text-slate-400 ml-1' : 'text-red-500 ml-1'}>*</span>
+                      </label>
+                      <div className="max-w-xs">
+                        <input
+                          type="date"
+                          value={account.end_date || ''}
+                          onChange={(e) => updateByKey(key, { end_date: e.target.value })}
+                          className={inputClass}
+                        />
+                        <p className="mt-1 text-xs text-slate-400">
+                          Verplicht bij &apos;Anders&apos; — bepaalt de cycluslengte voor deze account.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   </div>
                 );
               })}
@@ -439,42 +542,6 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
   // wijziging van start_date / cost_period. Bij handmatige edit zetten we 't uit.
   const [renewalAutoFilled, setRenewalAutoFilled] = useState(true);
 
-  // Helpers: maand-veilige datum-rekensom (31 jan + 1 mnd → 28/29 feb, niet 3 mrt)
-  const addMonthsSafe = (isoDate, months) => {
-    if (!isoDate) return '';
-    const d = new Date(isoDate);
-    if (isNaN(d.getTime())) return '';
-    const day = d.getDate();
-    d.setMonth(d.getMonth() + months);
-    if (d.getDate() < day) d.setDate(0); // overflow → laatste dag vorige maand
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-  };
-
-  const addDaysSafe = (isoDate, days) => {
-    if (!isoDate) return '';
-    const d = new Date(isoDate);
-    if (isNaN(d.getTime())) return '';
-    d.setDate(d.getDate() + days);
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-  };
-
-  // Auto-fill vervaldatum op basis van startdatum + facturatieperiode.
-  // 'Eenmalig' en 'Anders' krijgen geen auto-berekende waarde (Anders = handmatig).
-  const PERIOD_MONTHS = { 'Maandelijks': 1, 'Per kwartaal': 3, 'Halfjaarlijks': 6, 'Jaarlijks': 12 };
-  const computeRenewalDate = (startDate, period) => {
-    if (!startDate) return '';
-    if (period === 'Wekelijks') return addDaysSafe(startDate, 7);
-    const months = PERIOD_MONTHS[period];
-    if (!months) return '';
-    return addMonthsSafe(startDate, months);
-  };
-
   // Afgeleide booleans voor leesbaarheid in JSX
   const isFlat       = billingModel === 'flat';
   const isPerSeat    = billingModel === 'per_seat';
@@ -537,6 +604,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
           owner_name: a.owner_name || '',
           start_date: a.start_date ? a.start_date.split('T')[0] : '',
           end_date: a.end_date ? a.end_date.split('T')[0] : '',
+          cost_period: a.cost_period || '',
           auto_renew: !!a.auto_renew,
           cost: a.cost ?? '',
           archived_at: a.archived_at ?? null,
@@ -670,6 +738,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
       owner_name: a.owner_name || null,
       start_date: a.start_date || null,
       end_date: a.end_date || null,
+      cost_period: a.cost_period || null,
       auto_renew: !!a.auto_renew,
       cost: a.cost === '' || a.cost === null || a.cost === undefined ? null : parseFloat(a.cost),
       archived_at: a.archived_at || null,
@@ -689,6 +758,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
       const changed = orig.owner_name !== a.owner_name
         || orig.start_date !== a.start_date
         || orig.end_date !== a.end_date
+        || (orig.cost_period || null) !== (a.cost_period || null)
         || !!orig.auto_renew !== !!a.auto_renew
         || origCost !== newCost
         || (orig.archived_at || null) !== (a.archived_at || null);
@@ -698,6 +768,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
           owner_name: a.owner_name || null,
           start_date: a.start_date || null,
           end_date: a.end_date || null,
+          cost_period: a.cost_period || null,
           auto_renew: !!a.auto_renew,
           cost: newCost,
           archived_at: a.archived_at || null,

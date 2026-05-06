@@ -109,18 +109,46 @@ function effectiveAccountCost(account, parentCost) {
   return parentCost || 0;
 }
 
-// Bereken het variabele deel (per-account of per-seat) per periode (zonder base_cost)
-function variablePerPeriod(sub, accountsForMonth) {
-  if (sub.accounts && sub.accounts.length > 0) {
-    return accountsForMonth.reduce((sum, a) => sum + effectiveAccountCost(a, sub.cost), 0);
+// Per-account factor: gebruikt account.cost_period als die gezet is, anders parent.
+// Voor 'Anders' op account-niveau: cycluslengte = (account.end_date - account.start_date)
+// in dagen, fallback op (parent.renewal_date - parent.start_date).
+function accountMonthlyFactor(account, parentSub) {
+  const period = account.cost_period || parentSub.cost_period;
+  if (!period) return 1;
+  if (period === 'Anders') {
+    const start = account.start_date || parentSub.start_date;
+    const end = account.end_date || parentSub.renewal_date;
+    if (!start || !end) return 0;
+    const days = (new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24);
+    if (days <= 0) return 0;
+    return (365 / 12) / days;
   }
+  const match = BILLING_PERIODS.find(p => p.value === period);
+  return match?.factor ?? 1;
+}
+
+// Bereken maandkosten in source currency (zonder fx). Bij accounts: per-account
+// factor toepassen op per-account cost. Plus base_cost × parent factor. Zonder
+// accounts: (cost × seats + base) × parent factor.
+function monthlyNative(sub, accountsForMonth) {
+  const base = parseFloat(sub.base_cost) || 0;
+  const parentFactor = getMonthlyFactor(sub);
+
+  if (sub.accounts && sub.accounts.length > 0) {
+    const accountsTotal = accountsForMonth.reduce((sum, a) => {
+      const c = effectiveAccountCost(a, sub.cost);
+      return sum + c * accountMonthlyFactor(a, sub);
+    }, 0);
+    return base * parentFactor + accountsTotal;
+  }
+
   const seatMultiplier = sub.cost_per_seat ? (sub.seats || 1) : 1;
-  return (parseFloat(sub.cost) || 0) * seatMultiplier;
+  const flat = (parseFloat(sub.cost) || 0) * seatMultiplier + base;
+  return flat * parentFactor;
 }
 
 // Maandkosten in euro, rekening houdend met base_cost, seats/accounts en valuta-conversie.
 // `rates` is een object zoals { USD: 0.93, GBP: 1.15, CHF: 1.05 } — 1 unit = X EUR.
-// Totaal = base_cost + variabel deel, beide door cost_period factor en fx rate.
 export function toEurMonthly(sub, rates = {}) {
   const ratesObj = typeof rates === 'number' ? { USD: rates } : rates;
   const fxRate = sub.currency && sub.currency !== 'EUR'
@@ -130,11 +158,8 @@ export function toEurMonthly(sub, rates = {}) {
   const activeAccts = sub.accounts && sub.accounts.length > 0
     ? activeAccountsInMonth(sub.accounts, new Date().getFullYear(), new Date().getMonth())
     : [];
-  const variable = variablePerPeriod(sub, activeAccts);
-  const base = parseFloat(sub.base_cost) || 0;
-  const totalPerPeriod = base + variable;
 
-  return totalPerPeriod * getMonthlyFactor(sub) * fxRate;
+  return monthlyNative(sub, activeAccts) * fxRate;
 }
 
 // Voor historische berekening (specifieke maand): gebruik account-status in die maand
@@ -147,9 +172,6 @@ export function toEurMonthlyFor(sub, year, month, rates = {}) {
   const activeAccts = sub.accounts && sub.accounts.length > 0
     ? activeAccountsInMonth(sub.accounts, year, month)
     : [];
-  const variable = variablePerPeriod(sub, activeAccts);
-  const base = parseFloat(sub.base_cost) || 0;
-  const totalPerPeriod = base + variable;
 
-  return totalPerPeriod * getMonthlyFactor(sub) * fxRate;
+  return monthlyNative(sub, activeAccts) * fxRate;
 }

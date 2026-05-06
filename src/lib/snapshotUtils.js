@@ -75,22 +75,39 @@ export async function backfillSubscriptionSnapshots(supabase, sub) {
     fxRate = rateRow?.rate ? parseFloat(rateRow.rate) : 1.0;
   }
 
-  const factor = factorForSub(sub);
+  const parentFactor = factorForSub(sub);
   const parentCost = parseFloat(sub.cost) || 0;
   const baseCost = parseFloat(sub.base_cost) || 0;
 
+  // Per-account factor — gebruikt account.cost_period als gezet, anders parent.
+  // 'Anders' op account-niveau: cycluslengte uit (account.end - account.start),
+  // fallback op parent (renewal - start).
+  const factorForAccount = (account) => {
+    const period = account.cost_period || sub.cost_period;
+    if (period === 'Anders') {
+      const start = account.start_date || sub.start_date;
+      const end = account.end_date || sub.renewal_date;
+      if (!start || !end) return 0;
+      const days = (new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24);
+      if (days <= 0) return 0;
+      return (365 / 12) / days;
+    }
+    return BILLING_FACTORS[period] ?? 1;
+  };
+
   const computeMonthlyNative = (year, month) => {
-    let variable;
     if (hasAccounts) {
       const firstDay = new Date(year, month, 1);
       const lastDay = new Date(year, month + 1, 0);
       const active = accounts.filter(a => isAccountActiveInRange(a, firstDay, lastDay));
-      variable = active.reduce((sum, a) => sum + effectiveAccountCost(a, parentCost), 0);
-    } else {
-      const seatMul = sub.cost_per_seat ? (sub.seats || 1) : 1;
-      variable = parentCost * seatMul;
+      const accountsTotal = active.reduce((sum, a) => {
+        const c = effectiveAccountCost(a, parentCost);
+        return sum + c * factorForAccount(a);
+      }, 0);
+      return baseCost * parentFactor + accountsTotal;
     }
-    return (baseCost + variable) * factor;
+    const seatMul = sub.cost_per_seat ? (sub.seats || 1) : 1;
+    return (baseCost + parentCost * seatMul) * parentFactor;
   };
 
   const startYear = startDate.getFullYear();
