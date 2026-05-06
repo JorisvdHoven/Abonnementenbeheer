@@ -64,7 +64,7 @@ function StatusIndicator({ status }) {
 }
 
 // Account row binnen de Accounts sectie
-function AccountRow({ acc, parentCost, currency }) {
+function AccountRow({ acc, parentCost, parentPeriod, currency }) {
   const today = new Date();
   const start = acc.start_date ? new Date(acc.start_date) : null;
   const end = acc.end_date ? new Date(acc.end_date) : null;
@@ -98,6 +98,10 @@ function AccountRow({ acc, parentCost, currency }) {
           )}
         </p>
         <p className="text-xs text-slate-400 mt-0.5 tabular-nums">
+          {(() => {
+            const period = acc.cost_period || parentPeriod;
+            return period ? <><span className="not-tabular-nums">{period}</span> · </> : null;
+          })()}
           {acc.start_date ? formatDate(acc.start_date) : '?'}
           {' → '}
           {acc.end_date ? formatDate(acc.end_date) : '∞'}
@@ -244,8 +248,9 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
 
           <Section title="Abonnement">
             <DetailRow label="Categorie" value={sub.category} />
-            <DetailRow label="Kostenmodel" value={BILLING_MODEL_LABELS[getBillingModel(sub)]} />
             <DetailRow label="Afdeling" value={sub.department} />
+            <DetailRow label="Kostenmodel" value={BILLING_MODEL_LABELS[getBillingModel(sub)]} />
+            <DetailRow label="Facturatieperiode" value={sub.cost_period} />
             {!hasAccounts && <DetailRow label="Gebruikers" value={sub.seats} mono />}
           </Section>
 
@@ -257,6 +262,7 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
                     key={acc.id}
                     acc={acc}
                     parentCost={sub.cost}
+                    parentPeriod={sub.cost_period}
                     currency={sub.currency}
                   />
                 ))}
