@@ -22,6 +22,27 @@ function hashStringSimple(s) {
   return Math.abs(h);
 }
 
+// Tussenvoegsels worden overgeslagen bij het bepalen van initialen.
+// 'Edwin van Almkerk' → EA (niet EV), 'Joris van den Hoven' → JH.
+// NL hoofdmoot + meest voorkomende DE/FR/IT varianten voor expat-namen.
+const TUSSENVOEGSELS = new Set([
+  'van', 'der', 'den', 'de', 'het', "'t", 'ten', 'ter', 'te',
+  'von', 'zu', 'zur', 'zum',
+  'la', 'le', 'les', 'du', 'des', 'da', 'di', 'del', 'della', 'dos', 'do', 'al',
+  'op', 'in', 'aan', 'bij', 'onder', 'voor', 'achter',
+]);
+
+function getInitials(name) {
+  const words = name.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '';
+  const significant = words.filter(w => !TUSSENVOEGSELS.has(w.toLowerCase()));
+  // Edge case: alleen tussenvoegsels (zeer zeldzaam) — fall back op originele woorden
+  const pool = significant.length > 0 ? significant : words;
+  if (pool.length === 1) return pool[0][0].toUpperCase();
+  // Eerste + LAATSTE significante woord (= voor- en achternaam, ook bij middle names)
+  return (pool[0][0] + pool[pool.length - 1][0]).toUpperCase();
+}
+
 export function AccountAvatar({ name, size = 'md' }) {
   const trimmed = (name || '').trim();
   const dim = size === 'sm' ? 'w-7 h-7 text-[10px]' : 'w-9 h-9 text-xs';
@@ -32,7 +53,7 @@ export function AccountAvatar({ name, size = 'md' }) {
       </div>
     );
   }
-  const initials = trimmed.split(/\s+/).map(w => w[0]).filter(Boolean).join('').slice(0, 2).toUpperCase();
+  const initials = getInitials(trimmed);
   const colorClass = ACCOUNT_AVATAR_COLORS[hashStringSimple(trimmed.toLowerCase()) % ACCOUNT_AVATAR_COLORS.length];
   return (
     <div className={`flex-shrink-0 ${dim} rounded-full bg-gradient-to-br ${colorClass} flex items-center justify-center text-white font-bold`}>
