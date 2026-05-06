@@ -329,12 +329,9 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period, pa
               {activeAccounts.map((account, idx) => {
                 const key = keyOf(account);
                 return (
-                  <div key={key} className="relative">
-                  <div
-                    className="p-3 grid grid-cols-1 sm:grid-cols-[1fr,140px,180px,140px,auto] gap-2 items-end"
-                  >
-                    {/* Mobile-only header: account-nummer + archive-knop */}
-                    <div className="sm:hidden flex items-center justify-between -mb-1">
+                  <div key={key} className="p-3 space-y-2.5">
+                    {/* Mobile-only header: account-nummer */}
+                    <div className="sm:hidden flex items-center justify-between">
                       <span className="text-[11px] uppercase tracking-wide font-semibold text-slate-400">
                         Account {idx + 1}
                       </span>
@@ -348,93 +345,99 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period, pa
                         <TrashIcon className="h-4 w-4" />
                       </button>
                     </div>
-                    <div>
-                      <label className="block text-xs text-slate-500 mb-1">Naam medewerker</label>
-                      <input
-                        type="text"
-                        value={account.owner_name || ''}
-                        onChange={(e) => updateByKey(key, { owner_name: e.target.value })}
-                        placeholder="Naam"
-                        className={inputClass}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-slate-500 mb-1">Startdatum</label>
-                      <input
-                        type="date"
-                        value={account.start_date || ''}
-                        onChange={(e) => updateAccountStart(key, e.target.value)}
-                        className={inputClass}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-slate-500 mb-1">Facturatieperiode</label>
-                      <div className="flex gap-1.5">
-                        <select
-                          value={account.cost_period || ''}
-                          onChange={(e) => updateAccountPeriod(key, e.target.value)}
-                          className={`flex-1 min-w-0 ${inputClass}`}
-                        >
-                          <option value="">Default ({period || 'parent'})</option>
-                          {BILLING_PERIODS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => updateByKey(key, { auto_renew: !account.auto_renew })}
-                          disabled={account.cost_period === 'Eenmalig'}
-                          title={account.cost_period === 'Eenmalig'
-                            ? 'Niet van toepassing bij eenmalig'
-                            : (account.auto_renew
-                                ? 'Auto-verlenging aan — vervaldatum schuift automatisch door'
-                                : 'Auto-verlenging uit — account stopt op vervaldatum')}
-                          className={`flex-shrink-0 h-9 w-9 inline-flex items-center justify-center rounded-md text-base font-semibold transition-all ${
-                            account.cost_period === 'Eenmalig'
-                              ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
-                              : account.auto_renew
-                                ? 'bg-primary/15 text-primary hover:bg-primary/20'
-                                : 'bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600'
-                          }`}
-                          aria-label={account.auto_renew ? 'Auto-verlenging aan' : 'Auto-verlenging uit'}
-                        >
-                          ↻
-                        </button>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs text-slate-500 mb-1">
-                        Prijs <span className="text-slate-400 font-normal">(optioneel)</span>
-                      </label>
-                      <div className="flex">
-                        <span className="px-2.5 py-2 border border-slate-200 border-r-0 rounded-l-md bg-slate-100 text-sm text-slate-500 flex items-center">{sym}</span>
+
+                    {/* Rij 1: Naam medewerker (full width) + archive-knop rechts (desktop) */}
+                    <div className="flex gap-2 items-end">
+                      <div className="flex-1 min-w-0">
+                        <label className="block text-xs text-slate-500 mb-1">Naam medewerker</label>
                         <input
-                          type="number"
-                          step="0.01"
-                          value={account.cost ?? ''}
-                          onChange={(e) => updateByKey(key, { cost: e.target.value })}
-                          placeholder={defaultCost ? `${defaultCost}` : 'standaard'}
-                          className="block w-full px-3 py-2 rounded-r-md border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                          type="text"
+                          value={account.owner_name || ''}
+                          onChange={(e) => updateByKey(key, { owner_name: e.target.value })}
+                          placeholder="Naam"
+                          className={inputClass}
                         />
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => archiveAccount(key)}
+                        className="hidden sm:flex flex-shrink-0 h-9 w-9 items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                        title="Verplaats naar archief"
+                        aria-label="Account archiveren"
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                      </button>
                     </div>
-                    {/* Desktop-only archive-knop in laatste grid-kolom */}
-                    <button
-                      type="button"
-                      onClick={() => archiveAccount(key)}
-                      className="hidden sm:flex h-9 w-9 items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
-                      title="Verplaats naar archief"
-                      aria-label="Account archiveren"
-                    >
-                      <TrashIcon className="h-4 w-4" />
-                    </button>
-                  </div>
-                  {/* Extra Vervaldatum-veld bij periode 'Anders' — onder de hoofd-rij */}
-                  {account.cost_period === 'Anders' && (
-                    <div className="px-3 pb-3 -mt-1">
-                      <label className="block text-xs text-slate-500 mb-1">
-                        Vervaldatum
-                        <span className={account.end_date ? 'text-slate-400 ml-1' : 'text-red-500 ml-1'}>*</span>
-                      </label>
+
+                    {/* Rij 2: Startdatum | Facturatieperiode + ↻ | Prijs — 3-koloms op desktop */}
+                    <div className="grid grid-cols-1 sm:grid-cols-[160px,1fr,160px] gap-2 items-end">
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-1">Startdatum</label>
+                        <input
+                          type="date"
+                          value={account.start_date || ''}
+                          onChange={(e) => updateAccountStart(key, e.target.value)}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-1">Facturatieperiode</label>
+                        <div className="flex gap-1.5">
+                          <select
+                            value={account.cost_period || ''}
+                            onChange={(e) => updateAccountPeriod(key, e.target.value)}
+                            className={`flex-1 min-w-0 ${inputClass}`}
+                          >
+                            <option value="">Default ({period || 'parent'})</option>
+                            {BILLING_PERIODS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => updateByKey(key, { auto_renew: !account.auto_renew })}
+                            disabled={account.cost_period === 'Eenmalig'}
+                            title={account.cost_period === 'Eenmalig'
+                              ? 'Niet van toepassing bij eenmalig'
+                              : (account.auto_renew
+                                  ? 'Auto-verlenging aan — vervaldatum schuift automatisch door'
+                                  : 'Auto-verlenging uit — account stopt op vervaldatum')}
+                            className={`flex-shrink-0 h-9 w-9 inline-flex items-center justify-center rounded-md text-base font-semibold transition-all ${
+                              account.cost_period === 'Eenmalig'
+                                ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                                : account.auto_renew
+                                  ? 'bg-primary/15 text-primary hover:bg-primary/20'
+                                  : 'bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600'
+                            }`}
+                            aria-label={account.auto_renew ? 'Auto-verlenging aan' : 'Auto-verlenging uit'}
+                          >
+                            ↻
+                          </button>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-1">
+                          Prijs <span className="text-slate-400 font-normal">(optioneel)</span>
+                        </label>
+                        <div className="flex">
+                          <span className="px-2.5 py-2 border border-slate-200 border-r-0 rounded-l-md bg-slate-100 text-sm text-slate-500 flex items-center">{sym}</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={account.cost ?? ''}
+                            onChange={(e) => updateByKey(key, { cost: e.target.value })}
+                            placeholder={defaultCost ? `${defaultCost}` : 'standaard'}
+                            className="block w-full px-3 py-2 rounded-r-md border border-slate-200 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Rij 3 (conditional): Vervaldatum bij periode 'Anders' */}
+                    {account.cost_period === 'Anders' && (
                       <div className="max-w-xs">
+                        <label className="block text-xs text-slate-500 mb-1">
+                          Vervaldatum
+                          <span className={account.end_date ? 'text-slate-400 ml-1' : 'text-red-500 ml-1'}>*</span>
+                        </label>
                         <input
                           type="date"
                           value={account.end_date || ''}
@@ -442,11 +445,10 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period, pa
                           className={inputClass}
                         />
                         <p className="mt-1 text-xs text-slate-400">
-                          Verplicht bij &apos;Anders&apos; — bepaalt de cycluslengte voor deze account.
+                          Verplicht bij &apos;Anders&apos; — bepaalt de cycluslengte voor dit account.
                         </p>
                       </div>
-                    </div>
-                  )}
+                    )}
                   </div>
                 );
               })}
