@@ -974,7 +974,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
             <p className="mt-1.5 text-xs text-slate-500 leading-relaxed">
               {isFlat        && <>Eén vast bedrag per facturatieperiode. Bv. Slack workspace, Netflix.</>}
               {isPerSeat     && <>Iedere gebruiker betaalt hetzelfde tarief × aantal gebruikers. Bv. Microsoft 365, Slack Pro.</>}
-              {isPerAccount  && <>Iedere medewerker heeft een eigen account met eigen start-/einddatum en eventueel eigen prijs. Bv. LinkedIn Pro, Adobe individueel.</>}
+              {isPerAccount  && <>Eigen account per medewerker, optioneel met eigen prijs. Bv. LinkedIn Pro, Adobe.</>}
               {isLicSeats    && <>Vaste licentie naast variabele kosten per gebruiker. Bv. Carerix (€300 licentie + €10/gebruiker).</>}
               {isVariable    && <>Bedrag varieert per maand op basis van gebruik — vul een schatting in. Optioneel: voeg vaste licentiekosten toe als die er ook zijn. Bv. AWS, Stripe fees, OpenAI API.</>}
             </p>
@@ -995,7 +995,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
                 label={costLabel}
                 value={formData.cost}
                 error={fieldErrors.cost}
-                hint={isPerAccount ? 'Optioneel — laat leeg als elk account een eigen prijs heeft.' : undefined}
+                hint={isPerAccount ? 'Optioneel.' : undefined}
               >
                 <div className="flex">
                   <select name="currency" value={formData.currency} onChange={handleChange} className="px-2 py-2 border border-slate-200 border-r-0 rounded-l-md bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
@@ -1074,7 +1074,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
           <SubLabel>Datums</SubLabel>
           {isPerAccount && (
             <p className="text-xs text-slate-500 -mt-1">
-              Gelden als default voor nieuwe accounts — per account aanpasbaar.
+              Defaults voor nieuwe accounts.
             </p>
           )}
 
@@ -1083,10 +1083,8 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
               label="Startdatum"
               value={formData.start_date}
               error={fieldErrors.start_date}
-              hint={!fieldErrors.start_date
-                ? (isPerAccount
-                    ? 'Wanneer dit abonnement begon — gebruikt voor historische cashflow.'
-                    : 'Mag leeg gelaten worden.')
+              hint={!fieldErrors.start_date && !isPerAccount
+                ? 'Mag leeg gelaten worden.'
                 : undefined}
             >
               <input
