@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, Fragment } from 'react';
 import { useSubscriptions } from '../hooks/useSubscriptions';
 import { useSettings } from '../hooks/useSettings';
 import { useCurrentUser } from '../hooks/useCurrentUser';
@@ -6,6 +6,7 @@ import { useDebounce } from '../hooks/useDebounce';
 import SubscriptionModal from '../components/SubscriptionModal';
 import { SubscriptionDetailPanel } from '../components/SubscriptionDetailPanel';
 import { SubLogo } from '../components/SubLogo';
+import { AccountAvatar } from '../components/AccountAvatar';
 import Modal from '../components/Modal';
 import BulkEditModal from '../components/BulkEditModal';
 import MultiSelect from '../components/MultiSelect';
@@ -165,13 +166,14 @@ function DaysLeft({ date, urgent }) {
   );
 }
 
-function SubRow({ sub, onView, showUrgency, isSelectable, isSelected, onToggleSelect }) {
+function SubRow({ sub, onView, showUrgency, isSelectable, isSelected, onToggleSelect, isExpanded, onToggleExpand }) {
   const renewalDate = sub.renewal_date;
   const isUrgent = showUrgency && renewalDate;
+  const hasAccounts = sub.accounts?.length > 0;
   return (
     <tr
       onClick={() => onView(sub)}
-      className={`cursor-pointer border-b border-slate-100 last:border-0 transition-colors ${isSelected ? 'bg-primary/5' : 'hover:bg-slate-50'}`}
+      className={`cursor-pointer border-b border-slate-100 last:border-0 transition-colors ${isSelected ? 'bg-primary/5' : (isExpanded ? 'bg-slate-50/60' : 'hover:bg-slate-50')}`}
     >
       {isSelectable && (
         <td className="pl-5 py-3.5 w-10" onClick={(e) => { e.stopPropagation(); onToggleSelect(sub.id); }}>
@@ -188,13 +190,12 @@ function SubRow({ sub, onView, showUrgency, isSelectable, isSelected, onToggleSe
       <td className="px-5 py-3">
         <div className="flex items-center gap-3">
           <SubLogo vendor={sub.vendor} name={sub.name} />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="font-semibold text-slate-900 text-sm truncate">{sub.name}</p>
             {(() => {
-              const hasAccounts = sub.accounts?.length > 0;
               const activeCount = hasAccounts ? countActiveAccountsNow(sub.accounts) : 0;
               const subtitle = hasAccounts
-                ? `${activeCount} actieve account${activeCount !== 1 ? 's' : ''}`
+                ? `${activeCount} actief account${activeCount !== 1 ? 's' : ''}`
                 : null;
               return (sub.vendor || subtitle) && (
                 <p className="text-xs text-slate-400 mt-0.5 truncate">
@@ -205,6 +206,22 @@ function SubRow({ sub, onView, showUrgency, isSelectable, isSelected, onToggleSe
               );
             })()}
           </div>
+          {hasAccounts && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onToggleExpand(sub.id); }}
+              className={`flex-shrink-0 h-7 w-7 inline-flex items-center justify-center rounded-md transition-all ${
+                isExpanded
+                  ? 'bg-slate-200 text-slate-700'
+                  : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
+              }`}
+              title={isExpanded ? 'Accounts verbergen' : 'Accounts tonen'}
+              aria-label={isExpanded ? 'Accounts verbergen' : 'Accounts tonen'}
+              aria-expanded={isExpanded}
+            >
+              <ChevronDownIcon className={`h-4 w-4 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+            </button>
+          )}
         </div>
       </td>
       <td className="px-5 py-3 hidden md:table-cell">
@@ -245,10 +262,83 @@ const COLUMNS = [
   { key: 'status',       label: 'Status',          className: 'hidden sm:table-cell' },
 ];
 
+// Inline lijst van accounts die verschijnt onder een uitgeklapte SubRow.
+// Read-only — bewerken gebeurt via het detail-panel of de modal.
+function AccountsExpandedRow({ sub, totalColumns }) {
+  const liveAccounts = (sub.accounts || []).filter(a => !a.archived_at);
+  const sym = currencySymbol(sub.currency);
+
+  // Helper: bepaal effectieve periode + datums per account (fallback parent)
+  const periodOf = (a) => a.cost_period || sub.cost_period;
+  const startOf  = (a) => a.start_date  || sub.start_date;
+  const endOf    = (a) => a.end_date    || sub.renewal_date;
+  const costOf   = (a) => {
+    if (a.cost !== null && a.cost !== undefined && a.cost !== '') return parseFloat(a.cost) || 0;
+    return parseFloat(sub.cost) || 0;
+  };
+
+  return (
+    <tr className="bg-slate-50/40 border-b border-slate-100 last:border-0">
+      <td colSpan={totalColumns} className="px-0 py-0">
+        <div className="px-5 py-3 pl-16">
+          {liveAccounts.length === 0 ? (
+            <p className="text-xs text-slate-400 italic">Geen actieve accounts.</p>
+          ) : (
+            <div className="space-y-1">
+              {liveAccounts.map(acc => {
+                const period = periodOf(acc);
+                const start = startOf(acc);
+                const end = endOf(acc);
+                const cost = costOf(acc);
+                const monthly = cost * (acc.cost_period
+                  ? getMonthlyFactor({ ...acc, start_date: start, renewal_date: end })
+                  : getMonthlyFactor(sub));
+                return (
+                  <div key={acc.id} className="flex items-center gap-3 py-1.5">
+                    <AccountAvatar name={acc.owner_name} size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-slate-700 truncate flex items-center gap-1.5">
+                        {acc.owner_name || <span className="italic text-slate-400">Zonder naam</span>}
+                        {acc.auto_renew && (
+                          <span title="Auto-verlenging aan" className="text-[10px] text-primary font-semibold">↻</span>
+                        )}
+                      </p>
+                      <p className="text-xs text-slate-400 tabular-nums">
+                        {period && <>{period}{(start || end) && ' · '}</>}
+                        {start ? formatDateLong(start) : '?'}
+                        {' → '}
+                        {end ? formatDateLong(end) : '∞'}
+                      </p>
+                    </div>
+                    <div className="text-sm font-medium text-slate-700 tabular-nums flex-shrink-0">
+                      {sym}{monthly.toFixed(2)}
+                      <span className="text-xs text-slate-400 ml-0.5">/mnd</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 function Section({ title, rows, onView, showUrgency, accent, isSelectable, selected, onToggleSelect, onToggleAll }) {
   const [open, setOpen] = useState(true);
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
+  const [expandedSubs, setExpandedSubs] = useState(new Set());
+
+  const toggleExpanded = (id) => {
+    setExpandedSubs(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const handleSort = (key) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -334,17 +424,29 @@ function Section({ title, rows, onView, showUrgency, accent, isSelectable, selec
                 </tr>
               </thead>
               <tbody>
-                {sorted.map(sub => (
-                  <SubRow
-                    key={sub.id}
-                    sub={sub}
-                    onView={onView}
-                    showUrgency={showUrgency}
-                    isSelectable={isSelectable}
-                    isSelected={selected?.has(sub.id) ?? false}
-                    onToggleSelect={onToggleSelect}
-                  />
-                ))}
+                {sorted.map(sub => {
+                  const isExpanded = expandedSubs.has(sub.id);
+                  // Aantal kolommen voor colSpan in de uitgeklapte rij — moet matchen
+                  // met wat zichtbaar is (alle 5 + optioneel checkbox-kolom).
+                  const totalColumns = COLUMNS.length + (isSelectable ? 1 : 0);
+                  return (
+                    <Fragment key={sub.id}>
+                      <SubRow
+                        sub={sub}
+                        onView={onView}
+                        showUrgency={showUrgency}
+                        isSelectable={isSelectable}
+                        isSelected={selected?.has(sub.id) ?? false}
+                        onToggleSelect={onToggleSelect}
+                        isExpanded={isExpanded}
+                        onToggleExpand={toggleExpanded}
+                      />
+                      {isExpanded && (
+                        <AccountsExpandedRow sub={sub} totalColumns={totalColumns} />
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           )}
