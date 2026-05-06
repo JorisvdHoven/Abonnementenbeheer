@@ -117,31 +117,37 @@ function ExportModal({ count, onExport, onClose }) {
 // is de status-kolom verderop al duidelijk genoeg.
 //
 // Mapping:
-//   actief + auto_renew=true                → "Verlengt automatisch" (groen)
+//   actief + auto_renew=true                → "Automatisch" (groen)
 //   actief + auto_renew=false + > 30d       → "Loopt af" (slate)
-//   actief + auto_renew=false + ≤ 30d       → "Loopt af (X dgn)" (oranje)
-//   anders                                   → null
+//   actief + auto_renew=false + ≤ 30d       → "Loopt af" (oranje) + "X dgn" subtitle
+//   anders                                   → "—"
 function RenewalPill({ sub }) {
   if (sub.status !== 'actief') return <span className="text-slate-300 text-xs">—</span>;
-  let dot, text, label;
+  let dot, text, label, subLabel = null;
   if (sub.auto_renew) {
-    [dot, text, label] = ['bg-green-500', 'text-slate-700', 'Verlengt automatisch'];
+    [dot, text, label] = ['bg-green-500', 'text-slate-700', 'Automatisch'];
   } else {
     const renewal = deriveRenewalDate(sub);
     const days = renewal
       ? Math.ceil((new Date(renewal) - new Date()) / (1000 * 60 * 60 * 24))
       : null;
     if (days != null && days >= 0 && days <= 30) {
-      [dot, text, label] = ['bg-orange-500', 'text-orange-700', `Loopt af (${days} dgn)`];
+      [dot, text, label] = ['bg-orange-500', 'text-orange-700', 'Loopt af'];
+      subLabel = `${days} dgn`;
     } else {
       [dot, text, label] = ['bg-slate-400', 'text-slate-700', 'Loopt af'];
     }
   }
   return (
-    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${text}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
-      {label}
-    </span>
+    <div className="inline-flex flex-col gap-0.5">
+      <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${text}`}>
+        <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
+        {label}
+      </span>
+      {subLabel && (
+        <span className="text-[11px] text-orange-600 tabular-nums pl-3">{subLabel}</span>
+      )}
+    </div>
   );
 }
 
@@ -411,7 +417,7 @@ function AccountExpandedRow({ acc, sub, isSelectable, isLast }) {
       {/* Verlenging-kolom: per-account auto-renew indicator */}
       <td className="px-5 py-2.5 hidden md:table-cell text-xs text-slate-500">
         {acc.auto_renew
-          ? <span className="inline-flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-green-500" />Verlengt automatisch</span>
+          ? <span className="inline-flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-green-500" />Automatisch</span>
           : <span className="inline-flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-slate-400" />Loopt af</span>}
       </td>
       {/* Einddatum-kolom: account einddatum */}
