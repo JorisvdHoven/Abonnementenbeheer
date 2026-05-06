@@ -4,6 +4,7 @@ import { BILLING_PERIODS, toMonthly, getMonthlyFactor, activeAccountsNow } from 
 import { currencySymbol, formatDate } from '../lib/format';
 import { ChevronDownIcon, PlusIcon, TrashIcon, InformationCircleIcon, ArrowUturnLeftIcon } from '@heroicons/react/24/outline';
 import { SubLogo } from './SubLogo';
+import { AccountAvatar } from './AccountAvatar';
 import Modal from './Modal';
 import { recomputeSubscriptionSnapshots } from '../lib/snapshotUtils';
 import { toast } from '../lib/toast';
@@ -346,17 +347,20 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period, pa
                       </button>
                     </div>
 
-                    {/* Rij 1: Naam medewerker (full width) + archive-knop rechts (desktop) */}
+                    {/* Rij 1: Avatar + Naam medewerker (full width) + archive-knop rechts */}
                     <div className="flex gap-2 items-end">
                       <div className="flex-1 min-w-0">
                         <label className="block text-xs text-slate-500 mb-1">Naam medewerker</label>
-                        <input
-                          type="text"
-                          value={account.owner_name || ''}
-                          onChange={(e) => updateByKey(key, { owner_name: e.target.value })}
-                          placeholder="Naam"
-                          className={inputClass}
-                        />
+                        <div className="flex items-center gap-2">
+                          <AccountAvatar name={account.owner_name} />
+                          <input
+                            type="text"
+                            value={account.owner_name || ''}
+                            onChange={(e) => updateByKey(key, { owner_name: e.target.value })}
+                            placeholder="Naam"
+                            className={`flex-1 min-w-0 ${inputClass}`}
+                          />
+                        </div>
                       </div>
                       <button
                         type="button"

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { XMarkIcon, PencilSquareIcon, TrashIcon, DocumentArrowDownIcon } from '@heroicons/react/24/outline';
 import { SubLogo } from './SubLogo';
+import { AccountAvatar } from './AccountAvatar';
 import { toMonthly, getMonthlyFactor, countActiveAccountsNow, activeAccountsNow, getBillingModel, BILLING_MODEL_LABELS } from '../lib/costUtils';
 import { formatDate, formatDateLong, currencySymbol } from '../lib/format';
 import { useCurrentUser } from '../hooks/useCurrentUser';
@@ -75,6 +76,7 @@ function AccountRow({ acc, parentCost, currency }) {
 
   return (
     <div className={`flex items-center gap-3 py-2.5 border-b border-slate-100 last:border-0 ${isArchived ? 'opacity-60' : ''}`}>
+      <AccountAvatar name={acc.owner_name} size="sm" />
       <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${stateColor}`} />
       <div className="min-w-0 flex-1">
         <p className={`text-sm font-medium truncate flex items-center gap-1.5 ${isArchived ? 'text-slate-500 line-through decoration-slate-300' : 'text-slate-900'}`}>
