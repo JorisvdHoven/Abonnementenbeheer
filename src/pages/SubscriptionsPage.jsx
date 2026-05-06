@@ -331,7 +331,7 @@ const COLUMNS = [
   { key: 'category',     label: 'Afdeling',          className: 'hidden md:table-cell' },
   { key: 'cost',         label: 'Kosten',            className: '' },
   { key: 'renewal_date', label: 'Einddatum periode', className: 'hidden lg:table-cell' },
-  { key: 'status',       label: 'Verlenging',        className: 'hidden sm:table-cell' },
+  { key: 'status',       label: 'Status',            className: 'hidden sm:table-cell' },
 ];
 
 // Eén rij per account in de uitgeklapte sectie — uitgelijnd met de
