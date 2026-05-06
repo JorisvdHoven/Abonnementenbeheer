@@ -161,11 +161,22 @@ function AddableSelect({ label, value, options, onChange, onAdd, error, required
 // Accounts manager — inline list met add/remove
 // ============================================================
 
-function AccountsManager({ accounts, onChange, defaultCost, currency, period }) {
+function AccountsManager({ accounts, onChange, defaultCost, currency, period, parentStartDate, parentRenewalDate }) {
   const [showArchive, setShowArchive] = useState(false);
 
+  // Bij toevoegen: nieuwe account erft parent's start, vervaldatum en
+  // krijgt auto-verlenging aan (meest gebruikelijke default voor lopende
+  // abonnementen). Per veld nog vrij aanpasbaar in de rij erna.
   const addAccount = () => {
-    onChange([...accounts, { _tempId: crypto.randomUUID(), owner_name: '', start_date: '', end_date: '', auto_renew: false, cost: '', archived_at: null }]);
+    onChange([...accounts, {
+      _tempId: crypto.randomUUID(),
+      owner_name: '',
+      start_date: parentStartDate || '',
+      end_date: parentRenewalDate || '',
+      auto_renew: true,
+      cost: '',
+      archived_at: null,
+    }]);
   };
 
   // Operate on accounts via stable key (id voor bestaande, _tempId voor nieuwe)
@@ -630,8 +641,8 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
     if (formData.renewal_date && isNaN(Date.parse(formData.renewal_date))) errors.renewal_date = 'Datum niet juist ingevoerd.';
     if (formData.renewal_date && formData.start_date && new Date(formData.renewal_date) < new Date(formData.start_date))
       errors.renewal_date = 'Vervaldatum mag niet vóór de startdatum liggen.';
-    // Anders: renewal_date verplicht (cycluslengte komt eruit)
-    if (formData.cost_period === 'Anders' && !isPerAccount) {
+    // Anders: renewal_date verplicht (cycluslengte komt eruit) — geldt ook bij per_account
+    if (formData.cost_period === 'Anders') {
       if (!formData.renewal_date) errors.renewal_date = 'Vervaldatum is verplicht bij periode "Anders".';
       if (!formData.start_date) errors.start_date = 'Startdatum is verplicht bij periode "Anders".';
     }
@@ -726,9 +737,11 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
       is_variable_cost: isVariable,
       start_date: formData.start_date || null,
       end_date: null,
-      // Bij per_account modus: parent renewal/auto_renew zijn niet meer relevant
-      // Bij Eenmalig: geen renewal_date en auto_renew = false (onlogisch anders)
-      renewal_date: isPerAccount || isOneOff ? null : (formData.renewal_date || null),
+      // Bij per_account: renewal_date wordt bewaard als default-cycluslengte voor accounts
+      //   (voor 'Anders' is 'ie verplicht; voor andere periodes wordt 'ie auto-gevuld).
+      // Bij Eenmalig: geen renewal_date en auto_renew = false (onlogisch anders).
+      // Parent auto_renew blijft uit bij per_account — accounts hebben eigen toggle.
+      renewal_date: isOneOff ? null : (formData.renewal_date || null),
       auto_renew: isPerAccount || isOneOff ? false : !!formData.auto_renew,
       created_by: user?.id
     };
@@ -956,19 +969,15 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
             return <div className="max-w-xs">{costField}</div>;
           })()}
 
-          {/* Conditional: accounts manager */}
-          {showAccounts && (
-            <AccountsManager
-              accounts={accounts}
-              onChange={setAccounts}
-              defaultCost={formData.cost}
-              currency={formData.currency}
-              period={formData.cost_period}
-            />
-          )}
-
-          {/* — Datums — periode hoort hier omdat ze samen de cyclus bepalen */}
+          {/* — Datums — periode hoort hier omdat ze samen de cyclus bepalen.
+              Bij per_account staan datums BOVEN de accounts: ze gelden als default
+              voor nieuwe accounts (zie hint hieronder). */}
           <SubLabel>Datums</SubLabel>
+          {isPerAccount && (
+            <p className="text-xs text-slate-500 -mt-1">
+              Gelden als default voor nieuwe accounts — per account aanpasbaar.
+            </p>
+          )}
 
           <FieldGrid>
             <Field
@@ -997,8 +1006,9 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
             </Field>
           </FieldGrid>
 
-          {/* Vervaldatum verschijnt alleen bij 'Anders' — eigen rij eronder, niet inline */}
-          {!isPerAccount && formData.cost_period === 'Anders' && (
+          {/* Vervaldatum verschijnt bij 'Anders' — ook bij per_account
+              (parent renewal_date dient dan als default cyclus-einde voor accounts). */}
+          {formData.cost_period === 'Anders' && (
             <div className="max-w-xs">
               <Field
                 label="Vervaldatum"
@@ -1018,6 +1028,20 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
                 />
               </Field>
             </div>
+          )}
+
+          {/* Conditional: accounts manager — NA Datums zodat parent-defaults
+              (start_date, renewal_date) al bekend zijn bij toevoegen. */}
+          {showAccounts && (
+            <AccountsManager
+              accounts={accounts}
+              onChange={setAccounts}
+              defaultCost={formData.cost}
+              currency={formData.currency}
+              period={formData.cost_period}
+              parentStartDate={formData.start_date}
+              parentRenewalDate={formData.renewal_date}
+            />
           )}
 
           {/* Auto-verlenging — niet bij per_account (per account ingesteld), uitgegrijsd bij Eenmalig */}
