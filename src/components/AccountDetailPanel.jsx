@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
-import { XMarkIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon, PencilSquareIcon } from '@heroicons/react/24/outline';
 import { AccountAvatar } from './AccountAvatar';
 import { SubLogo } from './SubLogo';
 import { getMonthlyFactor, deriveRenewalDate } from '../lib/costUtils';
 import { formatDate, currencySymbol } from '../lib/format';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 
 // ============================================================
 // Layout primitives — kopie van SubscriptionDetailPanel-stijl
@@ -38,7 +39,8 @@ function Section({ title, children }) {
 // zijn als gebruiker vanuit parent-panel een account opent.
 // ============================================================
 
-export function AccountDetailPanel({ account, sub, onClose }) {
+export function AccountDetailPanel({ account, sub, onClose, onEditParent }) {
+  const { isAdmin } = useCurrentUser();
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
@@ -156,12 +158,22 @@ export function AccountDetailPanel({ account, sub, onClose }) {
             )}
           </Section>
 
-          {/* Hint dat bewerken via parent gaat */}
-          <p className="text-xs text-slate-400 leading-relaxed pt-1">
-            Account bewerken? Open <span className="font-medium text-slate-500">{sub.name}</span> via het potlood-icoon
-            en pas dit account aan in de accounts-lijst.
-          </p>
         </div>
+
+        {/* Footer met bewerken-knop — opent SubscriptionModal van de parent.
+            De gebruiker komt in de accounts-lijst van het parent abo en kan
+            daar de account-velden aanpassen. */}
+        {isAdmin && onEditParent && (
+          <div className="px-6 py-4 border-t border-slate-100 flex gap-3 bg-white">
+            <button
+              onClick={() => onEditParent(sub)}
+              className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:brightness-110 transition-all"
+            >
+              <PencilSquareIcon className="h-4 w-4" />
+              Account bewerken
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

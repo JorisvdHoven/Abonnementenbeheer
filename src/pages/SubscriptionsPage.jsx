@@ -942,6 +942,11 @@ function SubscriptionsPage() {
           account={detailAccount.account}
           sub={detailAccount.sub}
           onClose={() => setDetailAccount(null)}
+          onEditParent={(parentSub) => {
+            // Sluit account-panel, open parent in edit-modal
+            setDetailAccount(null);
+            handleEdit(parentSub);
+          }}
         />
       )}
 
