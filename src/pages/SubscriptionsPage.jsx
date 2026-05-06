@@ -933,6 +933,7 @@ function SubscriptionsPage() {
           onClose={() => setDetailSub(null)}
           onEdit={handleEdit}
           onDelete={handleDelete}
+          onViewAccount={handleViewAccount}
         />
       )}
 

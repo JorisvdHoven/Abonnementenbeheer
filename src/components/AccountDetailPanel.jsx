@@ -3,7 +3,6 @@ import { XMarkIcon } from '@heroicons/react/24/outline';
 import { AccountAvatar } from './AccountAvatar';
 import { getMonthlyFactor, deriveRenewalDate } from '../lib/costUtils';
 import { formatDate, currencySymbol } from '../lib/format';
-import Modal from './Modal';
 
 // ============================================================
 // Layout primitives — kopie van SubscriptionDetailPanel-stijl
@@ -32,8 +31,10 @@ function Section({ title, children }) {
 
 // ============================================================
 // AccountDetailPanel — read-only preview van 1 account binnen een
-// per_account abonnement. Verschijnt als een modal-style paneel.
-// Alle velden tonen effectieve waarden (eigen of geërfd van parent).
+// per_account abonnement. Right-side panel — zelfde stijl als
+// SubscriptionDetailPanel zodat het visueel consistent oogt.
+// Z-index 50 (boven SubscriptionDetailPanel z-40), zodat ze stackbaar
+// zijn als gebruiker vanuit parent-panel een account opent.
 // ============================================================
 
 export function AccountDetailPanel({ account, sub, onClose }) {
@@ -73,39 +74,37 @@ export function AccountDetailPanel({ account, sub, onClose }) {
   const stateDot = isArchived ? 'bg-slate-300' : isActive ? 'bg-green-500' : 'bg-slate-400';
 
   return (
-    <Modal onClose={onClose} size="md" scrollable ariaLabel={`Account ${account.owner_name || ''}`}>
-      {/* Header met avatar + naam */}
-      <div className="px-6 py-5 border-b border-slate-100 flex items-start justify-between gap-4">
-        <div className="flex items-center gap-4 min-w-0 flex-1">
-          <AccountAvatar name={account.owner_name} size="md" />
-          <div className="min-w-0">
-            <h2 className="text-xl font-bold text-slate-900 truncate">
-              {account.owner_name || <span className="italic text-slate-400">Zonder naam</span>}
-            </h2>
-            <div className="flex items-center gap-2 mt-1 text-sm">
-              <span className="text-slate-500 truncate">Onderdeel van {sub.name}</span>
-              <span className="text-slate-300">·</span>
-              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
-                <span className={`w-1.5 h-1.5 rounded-full ${stateDot}`} />
-                {stateLabel}
-              </span>
-            </div>
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <div className="absolute inset-0 bg-slate-950/30 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-50 w-full max-w-md bg-white shadow-2xl flex flex-col h-full sm:rounded-l-2xl overflow-hidden">
+
+        {/* Header */}
+        <div className="px-6 pt-5 pb-4 border-b border-slate-100">
+          <div className="flex items-start justify-between mb-3">
+            <AccountAvatar name={account.owner_name} size="md" />
+            <button
+              onClick={onClose}
+              className="p-1.5 -m-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
+              aria-label="Sluiten"
+            >
+              <XMarkIcon className="h-5 w-5" />
+            </button>
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900 truncate">
+            {account.owner_name || <span className="italic text-slate-400">Zonder naam</span>}
+          </h2>
+          <div className="flex items-center gap-2 mt-1 text-sm">
+            <span className="text-slate-500 truncate">Onderdeel van {sub.name}</span>
+            <span className="text-slate-300">·</span>
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
+              <span className={`w-1.5 h-1.5 rounded-full ${stateDot}`} />
+              {stateLabel}
+            </span>
           </div>
         </div>
-        <button
-          onClick={onClose}
-          className="text-slate-400 hover:text-slate-700 p-1 -m-1 transition-colors flex-shrink-0"
-          aria-label="Sluiten"
-        >
-          <XMarkIcon className="h-5 w-5" />
-        </button>
-      </div>
-
-      {/* Body */}
-      <div className="px-6 py-5 space-y-6">
 
         {/* Maandkosten card */}
-        <div>
+        <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-b from-slate-50/40 to-white">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Maandkosten</p>
           <div className="flex items-baseline gap-2">
             <p className="text-3xl font-bold text-slate-900 tabular-nums leading-none">
@@ -125,40 +124,40 @@ export function AccountDetailPanel({ account, sub, onClose }) {
           )}
         </div>
 
-        <hr className="border-slate-100" />
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
 
-        {/* Cyclus */}
-        <Section title="Cyclus">
-          <DetailRow label="Facturatieperiode" value={period} />
-          <DetailRow
-            label="Auto-verlenging"
-            value={
-              account.auto_renew
-                ? <span className="inline-flex items-center gap-1.5">Ja <span className="text-primary text-base font-semibold leading-none">↻</span></span>
-                : 'Nee'
-            }
-          />
-        </Section>
+          <Section title="Cyclus">
+            <DetailRow label="Facturatieperiode" value={period} />
+            <DetailRow
+              label="Auto-verlenging"
+              value={
+                account.auto_renew
+                  ? <span className="inline-flex items-center gap-1.5">Ja <span className="text-primary text-base font-semibold leading-none">↻</span></span>
+                  : 'Nee'
+              }
+            />
+          </Section>
 
-        {/* Datums */}
-        <Section title="Datums">
-          <DetailRow label="Startdatum" value={startDate ? formatDate(startDate) : null} mono />
-          <DetailRow
-            label={account.cost_period === 'Eenmalig' ? 'Datum aankoop' : 'Einddatum periode'}
-            value={endDate ? formatDate(endDate) : null}
-            mono
-          />
-          {isArchived && (
-            <DetailRow label="Gearchiveerd op" value={formatDate(account.archived_at)} mono />
-          )}
-        </Section>
+          <Section title="Datums">
+            <DetailRow label="Startdatum" value={startDate ? formatDate(startDate) : null} mono />
+            <DetailRow
+              label={account.cost_period === 'Eenmalig' ? 'Datum aankoop' : 'Einddatum periode'}
+              value={endDate ? formatDate(endDate) : null}
+              mono
+            />
+            {isArchived && (
+              <DetailRow label="Gearchiveerd op" value={formatDate(account.archived_at)} mono />
+            )}
+          </Section>
 
-        {/* Hint dat bewerken via parent gaat */}
-        <p className="text-xs text-slate-400 leading-relaxed pt-1">
-          Account bewerken? Open <span className="font-medium text-slate-500">{sub.name}</span> via het potlood-icoon
-          en pas dit account aan in de accounts-lijst.
-        </p>
+          {/* Hint dat bewerken via parent gaat */}
+          <p className="text-xs text-slate-400 leading-relaxed pt-1">
+            Account bewerken? Open <span className="font-medium text-slate-500">{sub.name}</span> via het potlood-icoon
+            en pas dit account aan in de accounts-lijst.
+          </p>
+        </div>
       </div>
-    </Modal>
+    </div>
   );
 }

@@ -64,7 +64,7 @@ function StatusIndicator({ status }) {
 }
 
 // Account row binnen de Accounts sectie
-function AccountRow({ acc, parentCost, parentPeriod, currency }) {
+function AccountRow({ acc, parentCost, parentPeriod, currency, onView }) {
   const today = new Date();
   const start = acc.start_date ? new Date(acc.start_date) : null;
   const end = acc.end_date ? new Date(acc.end_date) : null;
@@ -87,7 +87,10 @@ function AccountRow({ acc, parentCost, parentPeriod, currency }) {
   const isCustomPrice = accountCost !== null && accountCost !== parseFloat(parentCost);
 
   return (
-    <div className={`flex items-center gap-3 py-2.5 border-b border-slate-100 last:border-0 ${isArchived ? 'opacity-60' : ''}`}>
+    <div
+      onClick={() => onView?.(acc)}
+      className={`flex items-center gap-3 py-2.5 px-2 -mx-2 rounded-md border-b border-slate-100 last:border-0 ${isArchived ? 'opacity-60' : ''} ${onView ? 'cursor-pointer hover:bg-slate-50 transition-colors' : ''}`}
+    >
       <AccountAvatar name={acc.owner_name} size="sm" />
       <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${stateColor}`} />
       <div className="min-w-0 flex-1">
@@ -123,7 +126,7 @@ function AccountRow({ acc, parentCost, parentPeriod, currency }) {
 // Hoofd-component
 // ============================================================
 
-export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
+export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete, onViewAccount }) {
   const { isAdmin } = useCurrentUser();
   const latestAudit = useLatestAuditFor('subscription', sub?.id);
 
@@ -283,6 +286,7 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
                     parentCost={sub.cost}
                     parentPeriod={sub.cost_period}
                     currency={sub.currency}
+                    onView={onViewAccount ? (a) => onViewAccount(a, sub) : undefined}
                   />
                 ))}
               </div>
