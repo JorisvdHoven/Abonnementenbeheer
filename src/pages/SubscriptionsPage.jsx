@@ -5,6 +5,7 @@ import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useDebounce } from '../hooks/useDebounce';
 import SubscriptionModal from '../components/SubscriptionModal';
 import { SubscriptionDetailPanel } from '../components/SubscriptionDetailPanel';
+import { AccountDetailPanel } from '../components/AccountDetailPanel';
 import { SubLogo } from '../components/SubLogo';
 import { AccountAvatar } from '../components/AccountAvatar';
 import Modal from '../components/Modal';
@@ -326,7 +327,7 @@ const COLUMNS = [
 // Eén rij per account in de uitgeklapte sectie — uitgelijnd met de
 // parent-kolommen (naam, afdeling, kosten, vervaldatum, status).
 // Read-only — bewerken gebeurt via het detail-panel of de modal.
-function AccountExpandedRow({ acc, sub, isSelectable, isLast }) {
+function AccountExpandedRow({ acc, sub, isSelectable, isLast, onView }) {
   const sym = currencySymbol(sub.currency);
 
   // Effectieve waardes (fallback op parent indien account-veld leeg)
@@ -341,7 +342,10 @@ function AccountExpandedRow({ acc, sub, isSelectable, isLast }) {
     : getMonthlyFactor(sub));
 
   return (
-    <tr className={`bg-slate-50/40 ${isLast ? '' : 'border-b border-slate-100'}`}>
+    <tr
+      onClick={() => onView?.(acc, sub)}
+      className={`bg-slate-50/40 ${onView ? 'cursor-pointer hover:bg-slate-100/60' : ''} transition-colors ${isLast ? '' : 'border-b border-slate-100'}`}
+    >
       {isSelectable && <td className="pl-5 py-2.5" />}
       {/* Naam-kolom: avatar + naam (ingedeukt zodat 't visueel een sub-item is) */}
       <td className="px-5 py-2.5">
@@ -391,7 +395,7 @@ const STATUS_ORDER = { actief: 0, verlopen: 1, opgezegd: 2 };
 // Bij 'alles' wordt secondary-sort op sub.status toegepast zodat
 // actieve subs altijd boven verlopen/opgezegde komen, ongeacht de
 // gekozen primary sort.
-function SubscriptionsTable({ rows, onView, isSelectable, selected, onToggleSelect, onToggleAll, isAllesTab }) {
+function SubscriptionsTable({ rows, onView, onViewAccount, isSelectable, selected, onToggleSelect, onToggleAll, isAllesTab }) {
   // Default: geen sortering — rij-volgorde uit DB / filter behouden.
   // Bij klik op kolom-header: kosten gaat default naar desc (hoog→laag),
   // andere kolommen naar asc (logische default).
@@ -512,6 +516,7 @@ function SubscriptionsTable({ rows, onView, isSelectable, selected, onToggleSele
                     sub={sub}
                     isSelectable={isSelectable}
                     isLast={idx === liveAccounts.length - 1}
+                    onView={onViewAccount}
                   />
                 ))}
               </Fragment>
@@ -614,6 +619,7 @@ function SubscriptionsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSub, setEditingSub] = useState(null);
   const [detailSub, setDetailSub] = useState(null);
+  const [detailAccount, setDetailAccount] = useState(null); // { account, sub }
   const [saveError, setSaveError] = useState(null);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [selected, setSelected] = useState(new Set());
@@ -715,7 +721,8 @@ function SubscriptionsPage() {
     ? filtered
     : filtered.filter(s => s.status === statusTab);
 
-  const handleView   = (sub) => setDetailSub(sub);
+  const handleView        = (sub) => setDetailSub(sub);
+  const handleViewAccount = (account, sub) => setDetailAccount({ account, sub });
   const handleEdit   = (sub) => { setDetailSub(null); setEditingSub(sub); setModalOpen(true); };
   const handleAdd    = () => { setEditingSub(null); setModalOpen(true); };
   const handleDelete = async (id) => {
@@ -889,6 +896,7 @@ function SubscriptionsPage() {
           <SubscriptionsTable
             rows={tabFilteredRows}
             onView={handleView}
+            onViewAccount={handleViewAccount}
             isSelectable={isAdmin}
             selected={selected}
             onToggleSelect={toggleSelect}
@@ -925,6 +933,14 @@ function SubscriptionsPage() {
           onClose={() => setDetailSub(null)}
           onEdit={handleEdit}
           onDelete={handleDelete}
+        />
+      )}
+
+      {detailAccount && (
+        <AccountDetailPanel
+          account={detailAccount.account}
+          sub={detailAccount.sub}
+          onClose={() => setDetailAccount(null)}
         />
       )}
 
