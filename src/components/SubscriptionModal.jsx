@@ -1023,15 +1023,28 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
           {/* Auto-verlenging — niet bij per_account (per account ingesteld), uitgegrijsd bij Eenmalig */}
           {!isPerAccount && (() => {
             const isOneOff = formData.cost_period === 'Eenmalig';
+            const isCustom = formData.cost_period === 'Anders';
+            // Hint wisselt op basis van periode + toggle stand. Bij standaard periodes
+            // is er geen expliciete vervaldatum zichtbaar — dus we praten over 'einde
+            // van facturatieperiode' i.p.v. 'op de vervaldatum'. Bij 'Anders' staat
+            // de vervaldatum wel zichtbaar in het formulier dus die mogen we noemen.
+            let hint;
+            if (isOneOff) {
+              hint = 'Niet van toepassing bij eenmalige aankopen.';
+            } else if (formData.auto_renew) {
+              hint = isCustom
+                ? 'Vervaldatum schuift automatisch door — cycluslengte = vervaldatum − startdatum.'
+                : 'Abonnement loopt automatisch door bij elke nieuwe facturatieperiode.';
+            } else {
+              hint = isCustom
+                ? 'Abonnement stopt op de vervaldatum.'
+                : 'Abonnement stopt aan het einde van de huidige facturatieperiode.';
+            }
             return (
               <div className={`rounded-lg bg-slate-50 border border-slate-100 px-4 py-3 ${isOneOff ? 'opacity-60' : ''}`}>
                 <ToggleSwitch
                   label="Auto-verlenging"
-                  hint={isOneOff
-                    ? 'Niet van toepassing bij eenmalige aankopen.'
-                    : (formData.auto_renew
-                        ? 'Vervaldatum schuift automatisch door bij elke periode. Het abonnement blijft actief.'
-                        : 'Abonnement stopt op de vervaldatum. Schakel uit voor abonnementen die je opzegt.')}
+                  hint={hint}
                   checked={!isOneOff && formData.auto_renew}
                   onChange={(v) => !isOneOff && setFormData(prev => ({ ...prev, auto_renew: v }))}
                   disabled={isOneOff}
