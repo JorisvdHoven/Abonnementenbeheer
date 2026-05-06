@@ -407,6 +407,30 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
   const [accounts, setAccounts] = useState([]);
   const [billingModel, setBillingModel] = useState('flat');
   const initialAccountsRef = useRef([]);
+  // Track of renewal_date door ons auto-gevuld is — zo ja, herberekenen bij
+  // wijziging van start_date / cost_period. Bij handmatige edit zetten we 't uit.
+  const [renewalAutoFilled, setRenewalAutoFilled] = useState(true);
+
+  // Helpers: maand-veilige datum-rekensom (31 jan + 1 mnd → 28/29 feb, niet 3 mrt)
+  const addMonthsSafe = (isoDate, months) => {
+    if (!isoDate) return '';
+    const d = new Date(isoDate);
+    if (isNaN(d.getTime())) return '';
+    const day = d.getDate();
+    d.setMonth(d.getMonth() + months);
+    if (d.getDate() < day) d.setDate(0); // overflow → laatste dag vorige maand
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const PERIOD_MONTHS = { 'Maandelijks': 1, 'Per kwartaal': 3, 'Jaarlijks': 12 };
+  const computeRenewalDate = (startDate, period) => {
+    const months = PERIOD_MONTHS[period];
+    if (!months || !startDate) return '';
+    return addMonthsSafe(startDate, months);
+  };
 
   // Afgeleide booleans voor leesbaarheid in JSX
   const isFlat       = billingModel === 'flat';
@@ -449,6 +473,11 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
         document_content: subscription.document_content || ''
       });
 
+      // Bij edit: als renewal_date al gezet is, beschouw die als handmatig.
+      // Auto-fill staat dan uit zodat we 'm niet plotseling overschrijven
+      // wanneer gebruiker start_date of cost_period aanpast.
+      setRenewalAutoFilled(!subscription.renewal_date);
+
       const subAccounts = subscription.accounts || [];
 
       // Derive billing model from existing data
@@ -477,7 +506,33 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    const newValue = type === 'checkbox' ? checked : value;
+
+    // Edit op renewal_date: handmatige waarde → auto-fill uit, leeggemaakt → auto-fill weer aan
+    if (name === 'renewal_date') {
+      setRenewalAutoFilled(newValue === '');
+    }
+
+    setFormData(prev => {
+      const next = { ...prev, [name]: newValue };
+
+      // Auto-fill renewal_date bij wijzigen van start_date of cost_period,
+      // mits we 'm zelf hebben ingevuld of het veld nog leeg is.
+      if (
+        (name === 'start_date' || name === 'cost_period') &&
+        (renewalAutoFilled || !prev.renewal_date)
+      ) {
+        const computed = computeRenewalDate(
+          name === 'start_date' ? newValue : prev.start_date,
+          name === 'cost_period' ? newValue : prev.cost_period
+        );
+        if (computed) {
+          next.renewal_date = computed;
+        }
+      }
+
+      return next;
+    });
   };
 
   const handleFileChange = (e) => {
