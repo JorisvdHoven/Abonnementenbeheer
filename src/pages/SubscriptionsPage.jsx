@@ -112,34 +112,40 @@ function ExportModal({ count, onExport, onClose }) {
   );
 }
 
-// Bepaalt of een sub binnen 30 dagen verloopt (en niet auto-verlengt).
-// Wordt gebruikt voor zowel het Verloopt-tab als de oranje status-pill.
-function isExpiringSoon(sub, now = new Date()) {
-  if (sub.status !== 'actief' || sub.auto_renew) return false;
-  if (!sub.renewal_date) return false;
-  const days = Math.ceil((new Date(sub.renewal_date) - now) / (1000 * 60 * 60 * 24));
-  return days >= 0 && days <= 30;
-}
-
-// Effectieve display-status: combineert sub.status met 'verloopt-binnenkort'-regel.
-// Levert 'expiring' op als actief + binnen 30 dagen + auto_renew=false.
-function effectiveStatus(sub, now = new Date()) {
-  if (sub.status === 'actief' && isExpiringSoon(sub, now)) return 'expiring';
-  return sub.status;
-}
-
-function StatusBadge({ status, daysLeft }) {
-  const config = {
-    actief:   { dot: 'bg-green-500',  text: 'text-slate-700', label: 'Actief' },
-    expiring: { dot: 'bg-orange-500', text: 'text-orange-700', label: daysLeft != null ? `Verloopt ${daysLeft}d` : 'Verloopt' },
-    verlopen: { dot: 'bg-red-500',    text: 'text-slate-700', label: 'Verlopen' },
-    opgezegd: { dot: 'bg-slate-400',  text: 'text-slate-500', label: 'Opgezegd' },
-  };
-  const c = config[status] ?? config.opgezegd;
+// Verlenging-pill — vertelt of een sub doorloopt of stopt, en geeft
+// urgentie-cue als 'ie binnenkort eindigt. Vervangt de oude minimale
+// 'Status'-pill met een rijker verhaal.
+//
+// Mapping:
+//   actief + auto_renew=true                → "Verlengt automatisch" (groen)
+//   actief + auto_renew=false + > 30d       → "Loopt af" (slate)
+//   actief + auto_renew=false + ≤ 30d       → "Loopt af (X dgn)" (oranje)
+//   verlopen                                → "Verlopen" (rood)
+//   opgezegd                                → "Opgezegd" (slate)
+function RenewalPill({ sub }) {
+  let dot, text, label;
+  if (sub.status === 'verlopen') {
+    [dot, text, label] = ['bg-red-500', 'text-slate-700', 'Verlopen'];
+  } else if (sub.status === 'opgezegd') {
+    [dot, text, label] = ['bg-slate-400', 'text-slate-500', 'Opgezegd'];
+  } else if (sub.auto_renew) {
+    [dot, text, label] = ['bg-green-500', 'text-slate-700', 'Verlengt automatisch'];
+  } else {
+    // Actief + niet auto-verlengend → loopt af op renewal_date
+    const renewal = deriveRenewalDate(sub);
+    const days = renewal
+      ? Math.ceil((new Date(renewal) - new Date()) / (1000 * 60 * 60 * 24))
+      : null;
+    if (days != null && days >= 0 && days <= 30) {
+      [dot, text, label] = ['bg-orange-500', 'text-orange-700', `Loopt af (${days} dgn)`];
+    } else {
+      [dot, text, label] = ['bg-slate-400', 'text-slate-700', 'Loopt af'];
+    }
+  }
   return (
-    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${c.text}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
-      {c.label ?? status}
+    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${text}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
+      {label}
     </span>
   );
 }
@@ -239,10 +245,6 @@ function SubRow({ sub, onView, isSelectable, isSelected, onToggleSelect, isExpan
   // zodat een leeg-DB-veld toch een logische waarde toont in de tabel.
   const renewalDate = deriveRenewalDate(sub);
   const hasAccounts = sub.accounts?.length > 0;
-  const effStatus = effectiveStatus(sub);
-  const daysLeft = renewalDate
-    ? Math.ceil((new Date(renewalDate) - new Date()) / (1000 * 60 * 60 * 24))
-    : null;
   return (
     <tr
       onClick={() => onView(sub)}
@@ -312,29 +314,24 @@ function SubRow({ sub, onView, isSelectable, isSelected, onToggleSelect, isExpan
       </td>
       <td className="px-5 py-3 hidden lg:table-cell">
         {renewalDate ? (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-slate-700 tabular-nums">{formatDateLong(renewalDate)}</span>
-            {sub.auto_renew && (
-              <span title="Auto-verlenging aan" className="text-primary text-base font-semibold leading-none">↻</span>
-            )}
-          </div>
+          <span className="text-sm text-slate-700 tabular-nums">{formatDateLong(renewalDate)}</span>
         ) : (
           <span className="text-slate-300 text-xs">—</span>
         )}
       </td>
       <td className="px-5 py-3 hidden sm:table-cell">
-        <StatusBadge status={effStatus} daysLeft={effStatus === 'expiring' ? daysLeft : null} />
+        <RenewalPill sub={sub} />
       </td>
     </tr>
   );
 }
 
 const COLUMNS = [
-  { key: 'name',         label: 'Naam',                  className: '' },
-  { key: 'category',     label: 'Afdeling',              className: 'hidden md:table-cell' },
-  { key: 'cost',         label: 'Kosten',                className: '' },
-  { key: 'renewal_date', label: 'Volgende facturatie',   className: 'hidden lg:table-cell' },
-  { key: 'status',       label: 'Status',                className: 'hidden sm:table-cell' },
+  { key: 'name',         label: 'Naam',              className: '' },
+  { key: 'category',     label: 'Afdeling',          className: 'hidden md:table-cell' },
+  { key: 'cost',         label: 'Kosten',            className: '' },
+  { key: 'renewal_date', label: 'Einddatum periode', className: 'hidden lg:table-cell' },
+  { key: 'status',       label: 'Verlenging',        className: 'hidden sm:table-cell' },
 ];
 
 // Eén rij per account in de uitgeklapte sectie — uitgelijnd met de
@@ -392,11 +389,11 @@ function AccountExpandedRow({ acc, sub, isSelectable, isLast }) {
 }
 
 // Volgorde van statussen voor secondary-sort bij 'Alles'-tab.
-// Actief (incl. binnenkort-verloopt) eerst, dan verlopen, dan opgezegd.
-const STATUS_ORDER = { actief: 0, expiring: 0, verlopen: 1, opgezegd: 2 };
+// Actief eerst, dan verlopen, dan opgezegd.
+const STATUS_ORDER = { actief: 0, verlopen: 1, opgezegd: 2 };
 
 // Hoofd-tabel — één flat lijst, geen secties. Default sort op kosten ↓.
-// Bij 'alles' wordt secondary-sort op effectiveStatus toegepast zodat
+// Bij 'alles' wordt secondary-sort op sub.status toegepast zodat
 // actieve subs altijd boven verlopen/opgezegde komen, ongeacht de
 // gekozen primary sort.
 function SubscriptionsTable({ rows, onView, isSelectable, selected, onToggleSelect, onToggleAll, isAllesTab }) {
@@ -428,8 +425,8 @@ function SubscriptionsTable({ rows, onView, isSelectable, selected, onToggleSele
   const sorted = [...rows].sort((a, b) => {
     // Secondary-sort op status bij 'Alles'-tab: actief > expiring > verlopen > opgezegd
     if (isAllesTab) {
-      const aRank = STATUS_ORDER[effectiveStatus(a)] ?? 99;
-      const bRank = STATUS_ORDER[effectiveStatus(b)] ?? 99;
+      const aRank = STATUS_ORDER[a.status] ?? 99;
+      const bRank = STATUS_ORDER[b.status] ?? 99;
       if (aRank !== bRank) return aRank - bRank;
     }
     const aVal = getSortVal(a, sortKey);
