@@ -94,7 +94,7 @@ export function AccountDetailPanel({ account, sub, onClose }) {
             {account.owner_name || <span className="italic text-slate-400">Zonder naam</span>}
           </h2>
           <div className="flex items-center gap-2 mt-1 text-sm">
-            <span className="text-slate-500 truncate">Onderdeel van {sub.name}</span>
+            <span className="text-slate-500 truncate">Account van {sub.name}</span>
             <span className="text-slate-300">·</span>
             <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600">
               <span className={`w-1.5 h-1.5 rounded-full ${stateDot}`} />
