@@ -112,26 +112,21 @@ function ExportModal({ count, onExport, onClose }) {
   );
 }
 
-// Verlenging-pill — vertelt of een sub doorloopt of stopt, en geeft
-// urgentie-cue als 'ie binnenkort eindigt. Vervangt de oude minimale
-// 'Status'-pill met een rijker verhaal.
+// Verlenging-pill — vertelt of een actieve sub doorloopt of stopt.
+// Toont alleen iets voor status='actief' subs. Voor verlopen/opgezegd
+// is de status-kolom verderop al duidelijk genoeg.
 //
 // Mapping:
 //   actief + auto_renew=true                → "Verlengt automatisch" (groen)
 //   actief + auto_renew=false + > 30d       → "Loopt af" (slate)
 //   actief + auto_renew=false + ≤ 30d       → "Loopt af (X dgn)" (oranje)
-//   verlopen                                → "Verlopen" (rood)
-//   opgezegd                                → "Opgezegd" (slate)
+//   anders                                   → null
 function RenewalPill({ sub }) {
+  if (sub.status !== 'actief') return <span className="text-slate-300 text-xs">—</span>;
   let dot, text, label;
-  if (sub.status === 'verlopen') {
-    [dot, text, label] = ['bg-red-500', 'text-slate-700', 'Verlopen'];
-  } else if (sub.status === 'opgezegd') {
-    [dot, text, label] = ['bg-slate-400', 'text-slate-500', 'Opgezegd'];
-  } else if (sub.auto_renew) {
+  if (sub.auto_renew) {
     [dot, text, label] = ['bg-green-500', 'text-slate-700', 'Verlengt automatisch'];
   } else {
-    // Actief + niet auto-verlengend → loopt af op renewal_date
     const renewal = deriveRenewalDate(sub);
     const days = renewal
       ? Math.ceil((new Date(renewal) - new Date()) / (1000 * 60 * 60 * 24))
@@ -148,6 +143,37 @@ function RenewalPill({ sub }) {
       {label}
     </span>
   );
+}
+
+// Eenvoudige Status-pill — toont alleen de DB-status (actief/verlopen/opgezegd).
+// Komt achteraan in de tabel als context bij vooral de 'Alles'-tab, en als
+// definitieve oordeel bij verlopen/opgezegde subs (waar Verlenging '—' toont).
+function StatusBadge({ status }) {
+  const config = {
+    actief:   { dot: 'bg-green-500',  text: 'text-slate-700', label: 'Actief' },
+    verlopen: { dot: 'bg-red-500',    text: 'text-slate-700', label: 'Verlopen' },
+    opgezegd: { dot: 'bg-slate-400',  text: 'text-slate-500', label: 'Opgezegd' },
+  };
+  const c = config[status] ?? config.opgezegd;
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${c.text}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
+      {c.label ?? status}
+    </span>
+  );
+}
+
+// Sort-rank voor 'Verlenging' kolom — urgent eerst (loopt af binnen 30d),
+// dan loopt-af-later, dan verlengt-automatisch, dan inactieve subs.
+function renewalRank(sub) {
+  if (sub.status !== 'actief') return 9;
+  if (sub.auto_renew) return 2;
+  const renewal = deriveRenewalDate(sub);
+  const days = renewal
+    ? Math.ceil((new Date(renewal) - new Date()) / (1000 * 60 * 60 * 24))
+    : null;
+  if (days != null && days >= 0 && days <= 30) return 0;
+  return 1;
 }
 
 function CostDisplay({ sub }) {
@@ -312,6 +338,9 @@ function SubRow({ sub, onView, isSelectable, isSelected, onToggleSelect, isExpan
       <td className="px-5 py-3 text-sm font-semibold text-slate-900">
         <CostDisplay sub={sub} />
       </td>
+      <td className="px-5 py-3 hidden md:table-cell">
+        <RenewalPill sub={sub} />
+      </td>
       <td className="px-5 py-3 hidden lg:table-cell">
         {renewalDate ? (
           <span className="text-sm text-slate-700 tabular-nums">{formatDateLong(renewalDate)}</span>
@@ -320,18 +349,19 @@ function SubRow({ sub, onView, isSelectable, isSelected, onToggleSelect, isExpan
         )}
       </td>
       <td className="px-5 py-3 hidden sm:table-cell">
-        <RenewalPill sub={sub} />
+        <StatusBadge status={sub.status} />
       </td>
     </tr>
   );
 }
 
 const COLUMNS = [
-  { key: 'name',         label: 'Naam',              className: '' },
-  { key: 'category',     label: 'Afdeling',          className: 'hidden md:table-cell' },
-  { key: 'cost',         label: 'Kosten',            className: '' },
-  { key: 'renewal_date', label: 'Einddatum periode', className: 'hidden lg:table-cell' },
-  { key: 'status',       label: 'Status',            className: 'hidden sm:table-cell' },
+  { key: 'name',          label: 'Naam',              className: '' },
+  { key: 'category',      label: 'Afdeling',          className: 'hidden md:table-cell' },
+  { key: 'cost',          label: 'Kosten',            className: '' },
+  { key: 'renewal_state', label: 'Verlenging',        className: 'hidden md:table-cell' },
+  { key: 'renewal_date',  label: 'Einddatum periode', className: 'hidden lg:table-cell' },
+  { key: 'status',        label: 'Status',            className: 'hidden sm:table-cell' },
 ];
 
 // Eén rij per account in de uitgeklapte sectie — uitgelijnd met de
@@ -378,7 +408,13 @@ function AccountExpandedRow({ acc, sub, isSelectable, isLast }) {
         {sym}{monthly.toFixed(2)}
         <span className="text-xs text-slate-400 ml-0.5">/mnd</span>
       </td>
-      {/* Vervaldatum-kolom: account einddatum */}
+      {/* Verlenging-kolom: per-account auto-renew indicator */}
+      <td className="px-5 py-2.5 hidden md:table-cell text-xs text-slate-500">
+        {acc.auto_renew
+          ? <span className="inline-flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-green-500" />Verlengt automatisch</span>
+          : <span className="inline-flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-slate-400" />Loopt af</span>}
+      </td>
+      {/* Einddatum-kolom: account einddatum */}
       <td className="px-5 py-2.5 hidden lg:table-cell text-sm text-slate-500 tabular-nums">
         {end ? formatDateLong(end) : <span className="text-slate-300">—</span>}
       </td>
@@ -419,6 +455,7 @@ function SubscriptionsTable({ rows, onView, isSelectable, selected, onToggleSele
   const getSortVal = (sub, key) => {
     if (key === 'cost') return (sub.cost || 0) * getMonthlyFactor(sub);
     if (key === 'renewal_date') return deriveRenewalDate(sub) || null;
+    if (key === 'renewal_state') return renewalRank(sub);
     return sub[key] ?? null;
   };
 
@@ -453,11 +490,12 @@ function SubscriptionsTable({ rows, onView, isSelectable, selected, onToggleSele
       <table className="w-full text-sm table-fixed">
         <colgroup>
           {isSelectable && <col style={{ width: '40px' }} />}
-          <col style={{ width: '32%' }} />
-          <col className="hidden md:table-column" style={{ width: '20%' }} />
-          <col style={{ width: '16%' }} />
-          <col className="hidden lg:table-column" style={{ width: '22%' }} />
-          <col className="hidden sm:table-column" style={{ width: '10%' }} />
+          <col style={{ width: '24%' }} />
+          <col className="hidden md:table-column" style={{ width: '14%' }} />
+          <col style={{ width: '14%' }} />
+          <col className="hidden md:table-column" style={{ width: '18%' }} />
+          <col className="hidden lg:table-column" style={{ width: '18%' }} />
+          <col className="hidden sm:table-column" style={{ width: '12%' }} />
         </colgroup>
         <thead>
           <tr className="border-b border-slate-100 bg-slate-50/40">
