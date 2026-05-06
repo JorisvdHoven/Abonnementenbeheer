@@ -59,8 +59,24 @@ function Field({ label, hint, error, required, value, children }) {
   );
 }
 
-function FieldGrid({ children }) {
-  return <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{children}</div>;
+function FieldGrid({ children, cols = 2 }) {
+  // 2-koloms is default; 3 voor compacte rijen op desktop. Mobiel valt altijd
+  // terug naar 1 kolom zodat input-velden bruikbaar blijven.
+  const colsClass = cols === 3
+    ? 'sm:grid-cols-3'
+    : cols === 2
+    ? 'sm:grid-cols-2'
+    : 'sm:grid-cols-1';
+  return <div className={`grid grid-cols-1 ${colsClass} gap-3`}>{children}</div>;
+}
+
+// Subtiel groeperend label binnen een Section — geen visueel zware divider
+function SubLabel({ children }) {
+  return (
+    <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-400 pt-1">
+      {children}
+    </div>
+  );
 }
 
 function ToggleSwitch({ checked, onChange, label, hint, disabled = false }) {
@@ -830,8 +846,8 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
         {/* Kosten & facturatie */}
         <Section label="Kosten & facturatie">
 
-          {/* Kernvraag: hoe wordt dit afgerekend */}
-          <Field label="Hoe wordt dit afgerekend?" value={billingModel}>
+          {/* Kostenmodel */}
+          <Field label="Kostenmodel" value={billingModel}>
             <select
               value={billingModel}
               onChange={(e) => setBillingModel(e.target.value)}
@@ -852,82 +868,108 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
             </p>
           </Field>
 
-          {/* Kosten input — label & beschikbaarheid wisselt per model */}
-          <FieldGrid>
-            <Field
-              label={
-                isPerSeat        ? 'Prijs per gebruiker' :
-                isPerAccount     ? 'Standaardprijs per account' :
-                isLicSeats       ? 'Prijs per gebruiker' :
-                isVariable       ? 'Geschatte kosten' :
-                                   'Bedrag'
-              }
-              value={formData.cost}
-              error={fieldErrors.cost}
-              hint={isPerAccount ? 'Default — kan per account overschreven worden.' : undefined}
-            >
-              <div className="flex">
-                <select name="currency" value={formData.currency} onChange={handleChange} className="px-2 py-2 border border-slate-200 border-r-0 rounded-l-md bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
-                  <option value="EUR">€ EUR</option>
-                  <option value="USD">$ USD</option>
-                  <option value="GBP">£ GBP</option>
-                  <option value="CHF">Fr. CHF</option>
+          {/* — Bedragen — */}
+          <SubLabel>Bedragen</SubLabel>
+
+          {/* Compacte 3-koloms grid waar mogelijk: prijs + (aantal of base_cost) + periode */}
+          {(() => {
+            const costLabel =
+              isPerSeat        ? 'Prijs per gebruiker' :
+              isPerAccount     ? 'Standaardprijs per account' :
+              isLicSeats       ? 'Prijs per gebruiker' :
+              isVariable       ? 'Geschatte kosten' :
+                                 'Bedrag';
+            const costField = (
+              <Field
+                label={costLabel}
+                value={formData.cost}
+                error={fieldErrors.cost}
+                hint={isPerAccount ? 'Default — kan per account overschreven worden.' : undefined}
+              >
+                <div className="flex">
+                  <select name="currency" value={formData.currency} onChange={handleChange} className="px-2 py-2 border border-slate-200 border-r-0 rounded-l-md bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
+                    <option value="EUR">€ EUR</option>
+                    <option value="USD">$ USD</option>
+                    <option value="GBP">£ GBP</option>
+                    <option value="CHF">Fr. CHF</option>
+                  </select>
+                  <input
+                    type="number"
+                    step="0.01"
+                    name="cost"
+                    value={formData.cost}
+                    onChange={handleChange}
+                    className={`block w-full px-3 py-2 rounded-r-md border ${fieldErrors.cost ? 'border-red-300 bg-red-50/40' : 'border-slate-200'} text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary`}
+                  />
+                </div>
+              </Field>
+            );
+            const seatsField = showSeats && (
+              <Field label="Aantal gebruikers" value={formData.seats} error={fieldErrors.seats}>
+                <input
+                  type="number"
+                  name="seats"
+                  min="1"
+                  value={formData.seats}
+                  onChange={handleChange}
+                  className={fieldErrors.seats ? inputClassError : inputClass}
+                />
+              </Field>
+            );
+            const baseField = showBase && (
+              <Field
+                label={isVariable ? 'Vaste licentie (optioneel)' : 'Vaste licentie'}
+                value={formData.base_cost}
+                hint={isVariable
+                  ? 'Wordt opgeteld bij de variabele kosten.'
+                  : 'Wordt opgeteld bij per-gebruiker kosten.'}
+              >
+                <div className="flex">
+                  <span className="px-3 py-2 border border-slate-200 border-r-0 rounded-l-md bg-slate-50 text-sm text-slate-500">{sym}</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    name="base_cost"
+                    value={formData.base_cost}
+                    onChange={handleChange}
+                    placeholder="0,00"
+                    className="block w-full px-3 py-2 rounded-r-md border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                  />
+                </div>
+              </Field>
+            );
+            const periodField = (
+              <Field label="Facturatieperiode" value={formData.cost_period}>
+                <select name="cost_period" value={formData.cost_period} onChange={handleChange} className={inputClass}>
+                  <option value="">Kies een periode</option>
+                  {BILLING_PERIODS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                 </select>
-                <input
-                  type="number"
-                  step="0.01"
-                  name="cost"
-                  value={formData.cost}
-                  onChange={handleChange}
-                  className={`block w-full px-3 py-2 rounded-r-md border ${fieldErrors.cost ? 'border-red-300 bg-red-50/40' : 'border-slate-200'} text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary`}
-                />
-              </div>
-            </Field>
-            <Field label="Facturatieperiode" value={formData.cost_period}>
-              <select name="cost_period" value={formData.cost_period} onChange={handleChange} className={inputClass}>
-                <option value="">Kies een periode</option>
-                {BILLING_PERIODS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-              </select>
-            </Field>
-          </FieldGrid>
+              </Field>
+            );
 
-          {/* Conditional: vaste licentiekosten (license_plus_seats of variable) */}
-          {showBase && (
-            <Field
-              label={isVariable ? 'Vaste licentiekosten (optioneel)' : 'Vaste licentiekosten'}
-              value={formData.base_cost}
-              hint={isVariable
-                ? 'Wordt opgeteld bij de variabele kosten. Laat leeg als er geen vast licentiedeel is.'
-                : 'Wordt opgeteld bij de per-gebruiker kosten.'}
-            >
-              <div className="flex max-w-xs">
-                <span className="px-3 py-2 border border-slate-200 border-r-0 rounded-l-md bg-slate-50 text-sm text-slate-500">{sym}</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  name="base_cost"
-                  value={formData.base_cost}
-                  onChange={handleChange}
-                  placeholder="0,00"
-                  className="block w-full px-3 py-2 rounded-r-md border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-                />
-              </div>
-            </Field>
-          )}
-
-          {/* Conditional: aantal gebruikers */}
-          {showSeats && (
-            <Field label="Aantal gebruikers" value={formData.seats} error={fieldErrors.seats}>
-              <input
-                type="number"
-                name="seats"
-                min="1"
-                value={formData.seats}
-                onChange={handleChange}
-                className={`max-w-[120px] ${fieldErrors.seats ? inputClassError : inputClass}`}
-              />
-            </Field>
-          )}
+            // Layout per kostenmodel:
+            // - per_seat (3 kol):                prijs | aantal | periode
+            // - license_plus_seats (3 kol rij1): prijs | aantal | periode
+            //                       (1 kol rij2): vaste licentie
+            // - variable (3 kol):                geschat | vaste licentie | periode
+            // - flat / per_account (2 kol):      prijs | periode
+            if (isPerSeat) {
+              return <FieldGrid cols={3}>{costField}{seatsField}{periodField}</FieldGrid>;
+            }
+            if (isLicSeats) {
+              return (
+                <>
+                  <FieldGrid cols={3}>{costField}{seatsField}{periodField}</FieldGrid>
+                  <div className="max-w-xs">{baseField}</div>
+                </>
+              );
+            }
+            if (isVariable) {
+              return <FieldGrid cols={3}>{costField}{baseField}{periodField}</FieldGrid>;
+            }
+            // flat & per_account
+            return <FieldGrid>{costField}{periodField}</FieldGrid>;
+          })()}
 
           {/* Conditional: accounts manager */}
           {showAccounts && (
@@ -940,9 +982,9 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
             />
           )}
 
-          {/* Datums — onderdeel van facturatie. Vervaldatum alleen tonen bij 'Anders'
-              (andere periodes hebben automatisch berekende vervaldatum). Bij per_account
-              wordt vervaldatum + auto-verlenging per account ingesteld. */}
+          {/* — Datums — */}
+          <SubLabel>Datums</SubLabel>
+
           <FieldGrid>
             <Field
               label="Startdatum"
@@ -951,7 +993,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
               hint={!fieldErrors.start_date
                 ? (isPerAccount
                     ? 'Wanneer dit abonnement begon — gebruikt voor historische cashflow.'
-                    : 'Wanneer dit abonnement begon. Mag leeg gelaten worden.')
+                    : 'Mag leeg gelaten worden.')
                 : undefined}
             >
               <input
@@ -968,7 +1010,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
                 value={formData.renewal_date}
                 error={fieldErrors.renewal_date}
                 hint={!fieldErrors.renewal_date
-                  ? 'Verplicht bij periode "Anders" — bepaalt de cycluslengte voor de maandberekening.'
+                  ? 'Verplicht bij "Anders" — bepaalt de cycluslengte voor de maandberekening.'
                   : undefined}
               >
                 <input
