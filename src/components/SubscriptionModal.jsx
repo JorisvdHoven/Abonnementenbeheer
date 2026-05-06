@@ -868,10 +868,9 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
             </p>
           </Field>
 
-          {/* — Bedragen — */}
+          {/* — Bedragen — (zonder periode; periode hoort bij datums want bepaalt de cyclus) */}
           <SubLabel>Bedragen</SubLabel>
 
-          {/* Compacte 3-koloms grid waar mogelijk: prijs + (aantal of base_cost) + periode */}
           {(() => {
             const costLabel =
               isPerSeat        ? 'Prijs per gebruiker' :
@@ -938,37 +937,23 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
                 </div>
               </Field>
             );
-            const periodField = (
-              <Field label="Facturatieperiode" value={formData.cost_period}>
-                <select name="cost_period" value={formData.cost_period} onChange={handleChange} className={inputClass}>
-                  <option value="">Kies een periode</option>
-                  {BILLING_PERIODS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                </select>
-              </Field>
-            );
 
-            // Layout per kostenmodel:
-            // - per_seat (3 kol):                prijs | aantal | periode
-            // - license_plus_seats (3 kol rij1): prijs | aantal | periode
-            //                       (1 kol rij2): vaste licentie
-            // - variable (3 kol):                geschat | vaste licentie | periode
-            // - flat / per_account (2 kol):      prijs | periode
+            // Layout per kostenmodel — periode is hier verdwenen, staat nu bij Datums:
+            // - per_seat:           prijs | aantal                    (2 kol)
+            // - license_plus_seats: prijs | aantal | vaste licentie   (3 kol op één rij)
+            // - variable:           geschat | vaste licentie          (2 kol)
+            // - flat / per_account: prijs                             (1 kol, max-w-xs)
             if (isPerSeat) {
-              return <FieldGrid cols={3}>{costField}{seatsField}{periodField}</FieldGrid>;
+              return <FieldGrid>{costField}{seatsField}</FieldGrid>;
             }
             if (isLicSeats) {
-              return (
-                <>
-                  <FieldGrid cols={3}>{costField}{seatsField}{periodField}</FieldGrid>
-                  <div className="max-w-xs">{baseField}</div>
-                </>
-              );
+              return <FieldGrid cols={3}>{costField}{seatsField}{baseField}</FieldGrid>;
             }
             if (isVariable) {
-              return <FieldGrid cols={3}>{costField}{baseField}{periodField}</FieldGrid>;
+              return <FieldGrid>{costField}{baseField}</FieldGrid>;
             }
-            // flat & per_account
-            return <FieldGrid>{costField}{periodField}</FieldGrid>;
+            // flat & per_account: enkel het bedrag — beperk breedte zodat 't niet leeg-rechts oogt
+            return <div className="max-w-xs">{costField}</div>;
           })()}
 
           {/* Conditional: accounts manager */}
@@ -982,35 +967,39 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
             />
           )}
 
-          {/* — Datums — */}
+          {/* — Datums — periode hoort hier omdat ze samen de cyclus bepalen */}
           <SubLabel>Datums</SubLabel>
 
-          <FieldGrid>
-            <Field
-              label="Startdatum"
-              value={formData.start_date}
-              error={fieldErrors.start_date}
-              hint={!fieldErrors.start_date
-                ? (isPerAccount
-                    ? 'Wanneer dit abonnement begon — gebruikt voor historische cashflow.'
-                    : 'Mag leeg gelaten worden.')
-                : undefined}
-            >
-              <input
-                type="date"
-                name="start_date"
+          {(() => {
+            const showVervaldatum = !isPerAccount && formData.cost_period === 'Anders';
+            const startField = (
+              <Field
+                label="Startdatum"
                 value={formData.start_date}
-                onChange={handleChange}
-                className={fieldErrors.start_date ? inputClassError : inputClass}
-              />
-            </Field>
-            {!isPerAccount && formData.cost_period === 'Anders' && (
+                error={fieldErrors.start_date}
+                hint={!fieldErrors.start_date
+                  ? (isPerAccount
+                      ? 'Wanneer dit abonnement begon — gebruikt voor historische cashflow.'
+                      : 'Mag leeg gelaten worden.')
+                  : undefined}
+              >
+                <input
+                  type="date"
+                  name="start_date"
+                  value={formData.start_date}
+                  onChange={handleChange}
+                  className={fieldErrors.start_date ? inputClassError : inputClass}
+                />
+              </Field>
+            );
+            const renewalField = (
               <Field
                 label="Vervaldatum"
+                required
                 value={formData.renewal_date}
                 error={fieldErrors.renewal_date}
                 hint={!fieldErrors.renewal_date
-                  ? 'Verplicht bij "Anders" — bepaalt de cycluslengte voor de maandberekening.'
+                  ? 'Bepaalt de cycluslengte voor de maandberekening.'
                   : undefined}
               >
                 <input
@@ -1021,8 +1010,21 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
                   className={fieldErrors.renewal_date ? inputClassError : inputClass}
                 />
               </Field>
-            )}
-          </FieldGrid>
+            );
+            const periodField = (
+              <Field label="Facturatieperiode" value={formData.cost_period}>
+                <select name="cost_period" value={formData.cost_period} onChange={handleChange} className={inputClass}>
+                  <option value="">Kies een periode</option>
+                  {BILLING_PERIODS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select>
+              </Field>
+            );
+
+            if (showVervaldatum) {
+              return <FieldGrid cols={3}>{startField}{renewalField}{periodField}</FieldGrid>;
+            }
+            return <FieldGrid>{startField}{periodField}</FieldGrid>;
+          })()}
 
           {/* Auto-verlenging — niet bij per_account (per account ingesteld), uitgegrijsd bij Eenmalig */}
           {!isPerAccount && (() => {
