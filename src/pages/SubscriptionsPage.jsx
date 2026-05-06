@@ -11,7 +11,7 @@ import Modal from '../components/Modal';
 import BulkEditModal from '../components/BulkEditModal';
 import MultiSelect from '../components/MultiSelect';
 import { toast } from '../lib/toast';
-import { toMonthly, toEurMonthly, getMonthlyFactor, countActiveAccountsNow, getBillingModel, BILLING_MODELS, BILLING_MODEL_LABELS } from '../lib/costUtils';
+import { toMonthly, toEurMonthly, getMonthlyFactor, deriveRenewalDate, countActiveAccountsNow, getBillingModel, BILLING_MODELS, BILLING_MODEL_LABELS } from '../lib/costUtils';
 import { formatDate, formatDateLong, currencySymbol } from '../lib/format';
 import {
   ChevronDownIcon,
@@ -222,28 +222,6 @@ function StatusTabs({ counts, value, onChange }) {
       })}
     </div>
   );
-}
-
-// Afgeleide vervaldatum voor display: als renewal_date null is maar
-// start_date + periode bekend, leiden we 'm af zodat de cel niet leeg is.
-// 'Eenmalig' / 'Anders' krijgen geen afgeleide waarde.
-function deriveRenewalDate(sub) {
-  if (sub.renewal_date) return sub.renewal_date;
-  if (!sub.start_date || !sub.cost_period) return null;
-  if (sub.cost_period === 'Eenmalig' || sub.cost_period === 'Anders') return null;
-  const PERIOD_MONTHS = { 'Maandelijks': 1, 'Per kwartaal': 3, 'Halfjaarlijks': 6, 'Jaarlijks': 12 };
-  const PERIOD_DAYS   = { 'Wekelijks': 7 };
-  const start = new Date(sub.start_date);
-  if (isNaN(start.getTime())) return null;
-  const now = new Date();
-  // Roll forward tot in de toekomst (eerstvolgende facturatie)
-  const next = new Date(start);
-  if (PERIOD_DAYS[sub.cost_period]) {
-    while (next < now) next.setDate(next.getDate() + PERIOD_DAYS[sub.cost_period]);
-  } else if (PERIOD_MONTHS[sub.cost_period]) {
-    while (next < now) next.setMonth(next.getMonth() + PERIOD_MONTHS[sub.cost_period]);
-  }
-  return next.toISOString().split('T')[0];
 }
 
 function SubRow({ sub, onView, isSelectable, isSelected, onToggleSelect, isExpanded, onToggleExpand }) {

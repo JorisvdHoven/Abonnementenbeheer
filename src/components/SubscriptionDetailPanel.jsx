@@ -14,7 +14,7 @@ function periodLabel(period) {
     default:              return null;
   }
 }
-import { toMonthly, getMonthlyFactor, countActiveAccountsNow, activeAccountsNow, getBillingModel, BILLING_MODEL_LABELS } from '../lib/costUtils';
+import { toMonthly, getMonthlyFactor, deriveRenewalDate, countActiveAccountsNow, activeAccountsNow, getBillingModel, BILLING_MODEL_LABELS } from '../lib/costUtils';
 import { formatDate, formatDateLong, currencySymbol } from '../lib/format';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useLatestAuditFor } from '../hooks/useAuditLog';
@@ -141,6 +141,18 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
   const hasLiveAccounts = liveAccounts.length > 0;
   const activeAccountCount = hasAccounts ? countActiveAccountsNow(sub.accounts) : 0;
   const baseCost = parseFloat(sub.base_cost) || 0;
+
+  // Bepalen welke velden relevant zijn op basis van het kostenmodel.
+  // Voorkomt visuele ruis door bv. 'Gebruikers: 1' bij Vast bedrag.
+  const billingModel = getBillingModel(sub);
+  const showSeats = billingModel === 'per_seat' || billingModel === 'license_plus_seats';
+  const showBase  = (billingModel === 'license_plus_seats' || billingModel === 'variable') && baseCost > 0;
+  const isOneOff  = sub.cost_period === 'Eenmalig';
+  const isPerAcc  = billingModel === 'per_account';
+  // Vervaldatum / auto-verlenging tonen we niet bij 'Eenmalig' (geen cyclus)
+  // en niet bij per_account (parent heeft geen einddatum, accounts wel).
+  const showRenewal = !isOneOff && !isPerAcc;
+  const displayRenewal = deriveRenewalDate(sub);
   const isVariable = !!sub.is_variable_cost;
 
   // Variabel deel per periode (per-account of per-seat)
@@ -249,9 +261,16 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
           <Section title="Abonnement">
             <DetailRow label="Categorie" value={sub.category} />
             <DetailRow label="Afdeling" value={sub.department} />
-            <DetailRow label="Kostenmodel" value={BILLING_MODEL_LABELS[getBillingModel(sub)]} />
+            <DetailRow label="Kostenmodel" value={BILLING_MODEL_LABELS[billingModel]} />
             <DetailRow label="Facturatieperiode" value={sub.cost_period} />
-            {!hasAccounts && <DetailRow label="Gebruikers" value={sub.seats} mono />}
+            {showSeats && <DetailRow label="Aantal gebruikers" value={sub.seats} mono />}
+            {showBase && (
+              <DetailRow
+                label={billingModel === 'variable' ? 'Vaste licentie (basis)' : 'Vaste licentie'}
+                value={`${currencySymbol(sub.currency)}${baseCost.toFixed(2)}`}
+                mono
+              />
+            )}
           </Section>
 
           {hasLiveAccounts && (
@@ -272,8 +291,16 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete }) {
 
           <Section title="Datums">
             <DetailRow label="Startdatum" value={sub.start_date ? formatDate(sub.start_date) : null} mono />
-            <DetailRow label="Vervaldatum" value={sub.renewal_date ? formatDate(sub.renewal_date) : null} mono />
-            <DetailRow label="Auto-verlenging" value={sub.auto_renew === true ? 'Ja' : sub.auto_renew === false ? 'Nee' : null} />
+            {showRenewal && (
+              <DetailRow
+                label={isOneOff ? 'Datum aankoop' : 'Einddatum periode'}
+                value={displayRenewal ? formatDate(displayRenewal) : null}
+                mono
+              />
+            )}
+            {showRenewal && (
+              <DetailRow label="Auto-verlenging" value={sub.auto_renew === true ? 'Ja' : 'Nee'} />
+            )}
           </Section>
 
           <Section title="Contact">

@@ -11,6 +11,29 @@ export const BILLING_PERIODS = [
   { value: 'Anders',        label: 'Anders…',       factor: null },
 ];
 
+// Display-afleiding van renewal_date — als 'm null is in de DB maar
+// start_date + cost_period bekend zijn, leiden we 'm af op basis van
+// start + periode + roll-forward naar de toekomst. Voorkomt lege cellen
+// in tabel en detail-panel. 'Eenmalig' en 'Anders' krijgen geen afgeleide
+// waarde (logisch: respectievelijk geen cyclus / vereist handmatige datum).
+export function deriveRenewalDate(sub) {
+  if (sub.renewal_date) return sub.renewal_date;
+  if (!sub.start_date || !sub.cost_period) return null;
+  if (sub.cost_period === 'Eenmalig' || sub.cost_period === 'Anders') return null;
+  const PERIOD_MONTHS = { 'Maandelijks': 1, 'Per kwartaal': 3, 'Halfjaarlijks': 6, 'Jaarlijks': 12 };
+  const PERIOD_DAYS   = { 'Wekelijks': 7 };
+  const start = new Date(sub.start_date);
+  if (isNaN(start.getTime())) return null;
+  const now = new Date();
+  const next = new Date(start);
+  if (PERIOD_DAYS[sub.cost_period]) {
+    while (next < now) next.setDate(next.getDate() + PERIOD_DAYS[sub.cost_period]);
+  } else if (PERIOD_MONTHS[sub.cost_period]) {
+    while (next < now) next.setMonth(next.getMonth() + PERIOD_MONTHS[sub.cost_period]);
+  }
+  return next.toISOString().split('T')[0];
+}
+
 // Dynamische factor: gebruikt vaste tabel voor bekende periodes, en berekent
 // uit start→renewal voor 'Anders'. Retourneert 0 bij ongeldige Anders-data
 // (geen dates, of renewal <= start).
