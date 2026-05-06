@@ -176,11 +176,10 @@ function CostDisplay({ sub }) {
 // altijd boven verlopen/opgezegd staat.
 function StatusTabs({ counts, value, onChange }) {
   const tabs = [
-    { key: 'actief',   label: 'Actief',                accent: 'bg-green-500' },
-    { key: 'expiring', label: 'Verloopt < 30d',        accent: 'bg-orange-500' },
-    { key: 'verlopen', label: 'Verlopen',              accent: 'bg-red-500' },
-    { key: 'opgezegd', label: 'Opgezegd',              accent: 'bg-slate-400' },
-    { key: 'alles',    label: 'Alles',                 accent: null },
+    { key: 'actief',   label: 'Actief',   accent: 'bg-green-500' },
+    { key: 'verlopen', label: 'Verlopen', accent: 'bg-red-500' },
+    { key: 'opgezegd', label: 'Opgezegd', accent: 'bg-slate-400' },
+    { key: 'alles',    label: 'Alles',    accent: null },
   ];
   return (
     <div className="bg-white rounded-2xl border border-slate-200/70 p-1 flex flex-wrap gap-1">
@@ -393,8 +392,8 @@ function AccountExpandedRow({ acc, sub, isSelectable, isLast }) {
 }
 
 // Volgorde van statussen voor secondary-sort bij 'Alles'-tab.
-// Actief eerst, dan verloopt-binnenkort, dan verlopen, dan opgezegd.
-const STATUS_ORDER = { actief: 0, expiring: 1, verlopen: 2, opgezegd: 3 };
+// Actief (incl. binnenkort-verloopt) eerst, dan verlopen, dan opgezegd.
+const STATUS_ORDER = { actief: 0, expiring: 0, verlopen: 1, opgezegd: 2 };
 
 // Hoofd-tabel — één flat lijst, geen secties. Default sort op kosten ↓.
 // Bij 'alles' wordt secondary-sort op effectiveStatus toegepast zodat
@@ -707,22 +706,19 @@ function SubscriptionsPage() {
   const filteredArchived = applyFilters(archivedSubscriptions);
 
   // Counts per status-tab — gebaseerd op `filtered` (dus respect andere filters
-  // zoals afdeling/categorie/zoek). 'expiring' is een sub-set van actief.
+  // zoals afdeling/categorie/zoek). 'verloopt < 30d' is geen aparte tab meer,
+  // wel een oranje pill in de Status-kolom binnen de Actief-tab.
   const tabCounts = {
-    actief:   filtered.filter(s => effectiveStatus(s) === 'actief').length,
-    expiring: filtered.filter(s => effectiveStatus(s) === 'expiring').length,
+    actief:   filtered.filter(s => s.status === 'actief').length,
     verlopen: filtered.filter(s => s.status === 'verlopen').length,
     opgezegd: filtered.filter(s => s.status === 'opgezegd').length,
     alles:    filtered.length,
   };
 
   // Rij-set die getoond wordt — gefilterd op de actieve tab.
-  const tabFilteredRows = (() => {
-    if (statusTab === 'alles')    return filtered;
-    if (statusTab === 'expiring') return filtered.filter(s => effectiveStatus(s) === 'expiring');
-    if (statusTab === 'actief')   return filtered.filter(s => effectiveStatus(s) === 'actief');
-    return filtered.filter(s => s.status === statusTab); // verlopen / opgezegd
-  })();
+  const tabFilteredRows = statusTab === 'alles'
+    ? filtered
+    : filtered.filter(s => s.status === statusTab);
 
   const handleView   = (sub) => setDetailSub(sub);
   const handleEdit   = (sub) => { setDetailSub(null); setEditingSub(sub); setModalOpen(true); };
