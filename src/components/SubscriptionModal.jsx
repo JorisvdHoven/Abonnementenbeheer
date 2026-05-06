@@ -995,7 +995,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
                 label={costLabel}
                 value={formData.cost}
                 error={fieldErrors.cost}
-                hint={isPerAccount ? 'Default — kan per account overschreven worden.' : undefined}
+                hint={isPerAccount ? 'Optioneel — laat leeg als elk account een eigen prijs heeft.' : undefined}
               >
                 <div className="flex">
                   <select name="currency" value={formData.currency} onChange={handleChange} className="px-2 py-2 border border-slate-200 border-r-0 rounded-l-md bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
@@ -1143,6 +1143,32 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
             />
           )}
 
+          {/* Maandtotaal-preview — direct na bedragen + datums + accounts zodat
+              gebruiker instant feedback krijgt zodra de cyclus-info compleet is.
+              Komt vóór Auto-verlenging want die beïnvloedt het bedrag niet. */}
+          {monthlyPreview !== null && (() => {
+            const baseFee = showBase ? (parseFloat(formData.base_cost) || 0) : 0;
+            const baseFeeMonthly = baseFee * getMonthlyFactor(formData);
+            const variableMonthly = monthlyPreview - baseFeeMonthly;
+            const showBreakdown = baseFee > 0 && variableMonthly > 0;
+            return (
+              <div className="rounded-lg bg-slate-50 border border-slate-100 px-4 py-3 flex items-baseline justify-between flex-wrap gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Maandtotaal</span>
+                <div className="text-sm tabular-nums">
+                  <span className="font-semibold text-slate-900">
+                    {isVariable ? '± ' : '≈ '}{sym}{monthlyPreview.toFixed(2)}
+                  </span>
+                  <span className="text-slate-400 ml-1">/mnd</span>
+                  {showBreakdown && (
+                    <span className="ml-3 text-slate-400">
+                      ({sym}{baseFeeMonthly.toFixed(2)} licentie + {isVariable ? '± ' : ''}{sym}{variableMonthly.toFixed(2)} {isVariable ? 'verbruik' : 'variabel'})
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Auto-verlenging — niet bij per_account (per account ingesteld), uitgegrijsd bij Eenmalig */}
           {!isPerAccount && (() => {
             const isOneOff = formData.cost_period === 'Eenmalig';
@@ -1176,29 +1202,6 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
             );
           })()}
 
-          {/* Live preview onderaan */}
-          {monthlyPreview !== null && (() => {
-            const baseFee = showBase ? (parseFloat(formData.base_cost) || 0) : 0;
-            const baseFeeMonthly = baseFee * getMonthlyFactor(formData);
-            const variableMonthly = monthlyPreview - baseFeeMonthly;
-            const showBreakdown = baseFee > 0 && variableMonthly > 0;
-            return (
-              <div className="rounded-lg bg-slate-50 border border-slate-100 px-4 py-3 flex items-baseline justify-between flex-wrap gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Maandtotaal</span>
-                <div className="text-sm tabular-nums">
-                  <span className="font-semibold text-slate-900">
-                    {isVariable ? '± ' : '≈ '}{sym}{monthlyPreview.toFixed(2)}
-                  </span>
-                  <span className="text-slate-400 ml-1">/mnd</span>
-                  {showBreakdown && (
-                    <span className="ml-3 text-slate-400">
-                      ({sym}{baseFeeMonthly.toFixed(2)} licentie + {isVariable ? '± ' : ''}{sym}{variableMonthly.toFixed(2)} {isVariable ? 'verbruik' : 'variabel'})
-                    </span>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
         </Section>
 
         <hr className="border-slate-100" />
