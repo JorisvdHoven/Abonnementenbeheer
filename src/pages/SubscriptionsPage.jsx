@@ -112,62 +112,40 @@ function ExportModal({ count, onExport, onClose }) {
   );
 }
 
-// Verlenging-cel — vertelt of een actieve sub doorloopt of stopt.
-// Geen dots (Status-kolom heeft die al), alleen kleur-cue voor urgentie.
+// Status-pill — combineert sub.status met auto_renew tot 4 varianten.
+// Sub.status zelf blijft DB-niveau gewoon actief/verlopen/opgezegd, maar
+// 'actief' splitst hier visueel in Actief (auto-verlengend) en Actief loopt af
+// (geen auto-verlenging — stopt op einddatum).
 //
-// Mapping:
-//   actief + auto_renew=true                → "Automatisch" (slate-700)
-//   actief + auto_renew=false + > 30d       → "Loopt af" (slate-500, lichter)
-//   actief + auto_renew=false + ≤ 30d       → "Loopt af · X dgn" (oranje, urgent)
-//   anders                                   → "—"
-function RenewalPill({ sub }) {
-  if (sub.status !== 'actief') return <span className="text-slate-300 text-xs">—</span>;
-  if (sub.auto_renew) {
-    return <span className="text-xs font-medium text-slate-700">Automatisch</span>;
+//   actief + auto_renew=true   → "Actief"           groen
+//   actief + auto_renew=false  → "Actief loopt af"  oranje
+//   verlopen                    → "Verlopen"         rood
+//   opgezegd                    → "Opgezegd"         slate
+function StatusBadge({ sub }) {
+  let dot, text, label;
+  if (sub.status === 'verlopen') {
+    [dot, text, label] = ['bg-red-500', 'text-slate-700', 'Verlopen'];
+  } else if (sub.status === 'opgezegd') {
+    [dot, text, label] = ['bg-slate-400', 'text-slate-500', 'Opgezegd'];
+  } else if (sub.auto_renew) {
+    [dot, text, label] = ['bg-green-500', 'text-slate-700', 'Actief'];
+  } else {
+    [dot, text, label] = ['bg-orange-500', 'text-orange-700', 'Actief loopt af'];
   }
-  const renewal = deriveRenewalDate(sub);
-  const days = renewal
-    ? Math.ceil((new Date(renewal) - new Date()) / (1000 * 60 * 60 * 24))
-    : null;
-  if (days != null && days >= 0 && days <= 30) {
-    return (
-      <span className="text-xs font-medium text-orange-700">
-        Loopt af <span className="text-orange-600 tabular-nums">· {days} dgn</span>
-      </span>
-    );
-  }
-  return <span className="text-xs font-medium text-slate-500">Loopt af</span>;
-}
-
-// Eenvoudige Status-pill — toont alleen de DB-status (actief/verlopen/opgezegd).
-// Komt achteraan in de tabel als context bij vooral de 'Alles'-tab, en als
-// definitieve oordeel bij verlopen/opgezegde subs (waar Verlenging '—' toont).
-function StatusBadge({ status }) {
-  const config = {
-    actief:   { dot: 'bg-green-500',  text: 'text-slate-700', label: 'Actief' },
-    verlopen: { dot: 'bg-red-500',    text: 'text-slate-700', label: 'Verlopen' },
-    opgezegd: { dot: 'bg-slate-400',  text: 'text-slate-500', label: 'Opgezegd' },
-  };
-  const c = config[status] ?? config.opgezegd;
   return (
-    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${c.text}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
-      {c.label ?? status}
+    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${text}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
+      {label}
     </span>
   );
 }
 
-// Sort-rank voor 'Verlenging' kolom — urgent eerst (loopt af binnen 30d),
-// dan loopt-af-later, dan verlengt-automatisch, dan inactieve subs.
-function renewalRank(sub) {
-  if (sub.status !== 'actief') return 9;
-  if (sub.auto_renew) return 2;
-  const renewal = deriveRenewalDate(sub);
-  const days = renewal
-    ? Math.ceil((new Date(renewal) - new Date()) / (1000 * 60 * 60 * 24))
-    : null;
-  if (days != null && days >= 0 && days <= 30) return 0;
-  return 1;
+// Sort-rank voor Status-kolom: actief eerst, dan actief-loopt-af,
+// dan verlopen, dan opgezegd.
+function statusRank(sub) {
+  if (sub.status === 'verlopen') return 2;
+  if (sub.status === 'opgezegd') return 3;
+  return sub.auto_renew ? 0 : 1;
 }
 
 function CostDisplay({ sub }) {
@@ -332,30 +310,31 @@ function SubRow({ sub, onView, isSelectable, isSelected, onToggleSelect, isExpan
       <td className="px-5 py-3 text-sm font-semibold text-slate-900">
         <CostDisplay sub={sub} />
       </td>
-      <td className="px-5 py-3 hidden md:table-cell">
-        <RenewalPill sub={sub} />
-      </td>
       <td className="px-5 py-3 hidden lg:table-cell">
         {renewalDate ? (
-          <span className="text-sm text-slate-700 tabular-nums">{formatDateLong(renewalDate)}</span>
+          <div className="inline-flex items-center gap-2">
+            <span className="text-sm text-slate-700 tabular-nums">{formatDateLong(renewalDate)}</span>
+            {sub.auto_renew && sub.status === 'actief' && (
+              <span title="Verlengt automatisch" className="text-primary text-base font-semibold leading-none">↻</span>
+            )}
+          </div>
         ) : (
           <span className="text-slate-300 text-xs">—</span>
         )}
       </td>
       <td className="px-5 py-3 hidden sm:table-cell">
-        <StatusBadge status={sub.status} />
+        <StatusBadge sub={sub} />
       </td>
     </tr>
   );
 }
 
 const COLUMNS = [
-  { key: 'name',          label: 'Naam',              className: '' },
-  { key: 'category',      label: 'Afdeling',          className: 'hidden md:table-cell' },
-  { key: 'cost',          label: 'Kosten',            className: '' },
-  { key: 'renewal_state', label: 'Verlenging',        className: 'hidden md:table-cell' },
-  { key: 'renewal_date',  label: 'Einddatum periode', className: 'hidden lg:table-cell' },
-  { key: 'status',        label: 'Status',            className: 'hidden sm:table-cell' },
+  { key: 'name',         label: 'Naam',              className: '' },
+  { key: 'category',     label: 'Afdeling',          className: 'hidden md:table-cell' },
+  { key: 'cost',         label: 'Kosten',            className: '' },
+  { key: 'renewal_date', label: 'Einddatum periode', className: 'hidden lg:table-cell' },
+  { key: 'status',       label: 'Status',            className: 'hidden sm:table-cell' },
 ];
 
 // Eén rij per account in de uitgeklapte sectie — uitgelijnd met de
@@ -383,11 +362,8 @@ function AccountExpandedRow({ acc, sub, isSelectable, isLast }) {
         <div className="flex items-center gap-3 pl-9">
           <AccountAvatar name={acc.owner_name} size="sm" />
           <div className="min-w-0">
-            <p className="text-sm font-medium text-slate-700 truncate flex items-center gap-1.5">
+            <p className="text-sm font-medium text-slate-700 truncate">
               {acc.owner_name || <span className="italic text-slate-400">Zonder naam</span>}
-              {acc.auto_renew && (
-                <span title="Auto-verlenging aan" className="text-[10px] text-primary font-semibold">↻</span>
-              )}
             </p>
             {period && period !== sub.cost_period && (
               <p className="text-xs text-slate-400 truncate">{period}</p>
@@ -402,15 +378,18 @@ function AccountExpandedRow({ acc, sub, isSelectable, isLast }) {
         {sym}{monthly.toFixed(2)}
         <span className="text-xs text-slate-400 ml-0.5">/mnd</span>
       </td>
-      {/* Verlenging-kolom: per-account auto-renew indicator */}
-      <td className="px-5 py-2.5 hidden md:table-cell text-xs">
-        <span className={acc.auto_renew ? 'text-slate-600' : 'text-slate-400'}>
-          {acc.auto_renew ? 'Automatisch' : 'Loopt af'}
-        </span>
-      </td>
-      {/* Einddatum-kolom: account einddatum */}
-      <td className="px-5 py-2.5 hidden lg:table-cell text-sm text-slate-500 tabular-nums">
-        {end ? formatDateLong(end) : <span className="text-slate-300">—</span>}
+      {/* Einddatum-kolom: account einddatum + ↻ als auto_renew */}
+      <td className="px-5 py-2.5 hidden lg:table-cell">
+        {end ? (
+          <div className="inline-flex items-center gap-2">
+            <span className="text-sm text-slate-500 tabular-nums">{formatDateLong(end)}</span>
+            {acc.auto_renew && (
+              <span title="Verlengt automatisch" className="text-primary text-sm font-semibold leading-none">↻</span>
+            )}
+          </div>
+        ) : (
+          <span className="text-slate-300">—</span>
+        )}
       </td>
       {/* Status-kolom: leeg (status is parent-niveau) */}
       <td className="px-5 py-2.5 hidden sm:table-cell" />
@@ -449,7 +428,7 @@ function SubscriptionsTable({ rows, onView, isSelectable, selected, onToggleSele
   const getSortVal = (sub, key) => {
     if (key === 'cost') return (sub.cost || 0) * getMonthlyFactor(sub);
     if (key === 'renewal_date') return deriveRenewalDate(sub) || null;
-    if (key === 'renewal_state') return renewalRank(sub);
+    if (key === 'status') return statusRank(sub);
     return sub[key] ?? null;
   };
 
@@ -484,12 +463,11 @@ function SubscriptionsTable({ rows, onView, isSelectable, selected, onToggleSele
       <table className="w-full text-sm table-fixed">
         <colgroup>
           {isSelectable && <col style={{ width: '40px' }} />}
-          <col style={{ width: '30%' }} />        {/* Naam — meeste ruimte voor logo/leverancier */}
-          <col className="hidden md:table-column" style={{ width: '14%' }} />  {/* Afdeling — pill + categorie */}
-          <col style={{ width: '12%' }} />        {/* Kosten — kort getal */}
-          <col className="hidden md:table-column" style={{ width: '16%' }} />  {/* Verlenging — 'Loopt af · X dgn' */}
-          <col className="hidden lg:table-column" style={{ width: '16%' }} />  {/* Einddatum — datum */}
-          <col className="hidden sm:table-column" style={{ width: '12%' }} />  {/* Status — korte pill */}
+          <col style={{ width: '32%' }} />        {/* Naam — meeste ruimte */}
+          <col className="hidden md:table-column" style={{ width: '16%' }} />  {/* Afdeling */}
+          <col style={{ width: '14%' }} />        {/* Kosten */}
+          <col className="hidden lg:table-column" style={{ width: '20%' }} />  {/* Einddatum + ↻ */}
+          <col className="hidden sm:table-column" style={{ width: '18%' }} />  {/* Status — 'Actief loopt af' is langer */}
         </colgroup>
         <thead>
           <tr className="border-b border-slate-100 bg-slate-50/40">
