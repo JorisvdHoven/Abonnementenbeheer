@@ -484,12 +484,12 @@ function SubscriptionsTable({ rows, onView, isSelectable, selected, onToggleSele
       <table className="w-full text-sm table-fixed">
         <colgroup>
           {isSelectable && <col style={{ width: '40px' }} />}
-          <col style={{ width: '24%' }} />
-          <col className="hidden md:table-column" style={{ width: '14%' }} />
-          <col style={{ width: '14%' }} />
-          <col className="hidden md:table-column" style={{ width: '18%' }} />
-          <col className="hidden lg:table-column" style={{ width: '18%' }} />
-          <col className="hidden sm:table-column" style={{ width: '12%' }} />
+          <col style={{ width: '30%' }} />        {/* Naam — meeste ruimte voor logo/leverancier */}
+          <col className="hidden md:table-column" style={{ width: '14%' }} />  {/* Afdeling — pill + categorie */}
+          <col style={{ width: '12%' }} />        {/* Kosten — kort getal */}
+          <col className="hidden md:table-column" style={{ width: '16%' }} />  {/* Verlenging — 'Loopt af · X dgn' */}
+          <col className="hidden lg:table-column" style={{ width: '16%' }} />  {/* Einddatum — datum */}
+          <col className="hidden sm:table-column" style={{ width: '12%' }} />  {/* Status — korte pill */}
         </colgroup>
         <thead>
           <tr className="border-b border-slate-100 bg-slate-50/40">
