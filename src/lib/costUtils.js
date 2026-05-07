@@ -52,10 +52,13 @@ export function getMonthlyFactor(sub) {
 }
 
 // Pricing model — afgeleid uit de bestaande velden. Eén bron van waarheid.
+// 'parking' gedraagt zich technisch identiek aan 'per_account' (zelfde DB-tabel
+// subscription_accounts). Verschil zit in de UI-labels: 'kenteken' ipv 'account'.
 export const BILLING_MODELS = [
   { value: 'flat',                label: 'Vast bedrag' },
   { value: 'per_seat',            label: 'Per gebruiker' },
   { value: 'per_account',         label: 'Per persoonlijk account' },
+  { value: 'parking',             label: 'Parkeren (per kenteken)' },
   { value: 'license_plus_seats',  label: 'Vaste licentie + per gebruiker' },
   { value: 'variable',            label: 'Op basis van verbruik' },
 ];
@@ -67,10 +70,45 @@ export const BILLING_MODEL_LABELS = Object.fromEntries(
 export function getBillingModel(sub) {
   if (!sub) return 'flat';
   if (sub.is_variable_cost) return 'variable';
+  if (sub.is_parking) return 'parking';
   if (sub.accounts && sub.accounts.some(a => !a.archived_at)) return 'per_account';
   if (sub.base_cost && parseFloat(sub.base_cost) > 0) return 'license_plus_seats';
   if (sub.cost_per_seat) return 'per_seat';
   return 'flat';
+}
+
+// Entity-labels helper: 'parking' gebruikt zelfde data structuur als 'per_account'
+// maar toont 'kenteken' overal in de UI ipv 'account'. Eén plek om te switchen.
+export function getEntityLabels(sub) {
+  const isParking = sub?.is_parking || getBillingModel(sub) === 'parking';
+  if (isParking) {
+    return {
+      isParking: true,
+      singular: 'kenteken',
+      plural: 'kentekens',
+      sectionTitle: 'Kentekens',
+      addButton: 'Kenteken toevoegen',
+      firstButton: 'Eerste kenteken toevoegen',
+      emptyText: 'Nog geen kentekens toegevoegd.',
+      nameLabel: 'Kenteken',
+      namePlaceholder: 'AB-12-CD',
+      defaultPriceLabel: 'Standaardprijs per kenteken',
+      detailHeader: 'Kenteken',
+    };
+  }
+  return {
+    isParking: false,
+    singular: 'account',
+    plural: 'accounts',
+    sectionTitle: 'Accounts',
+    addButton: 'Account toevoegen',
+    firstButton: 'Eerste account toevoegen',
+    emptyText: 'Nog geen accounts toegevoegd.',
+    nameLabel: 'Naam medewerker',
+    namePlaceholder: 'Naam',
+    defaultPriceLabel: 'Standaardprijs per account',
+    detailHeader: 'Account',
+  };
 }
 
 export function toMonthly(cost, period) {

@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { XMarkIcon, PencilSquareIcon } from '@heroicons/react/24/outline';
 import { AccountAvatar } from './AccountAvatar';
 import { SubLogo } from './SubLogo';
-import { getMonthlyFactor, deriveRenewalDate } from '../lib/costUtils';
+import { getMonthlyFactor, deriveRenewalDate, getEntityLabels } from '../lib/costUtils';
 import { formatDate, currencySymbol } from '../lib/format';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 
@@ -49,6 +49,7 @@ export function AccountDetailPanel({ account, sub, onClose, onEditParent }) {
 
   if (!account || !sub) return null;
 
+  const entityLabels = getEntityLabels(sub);
   const sym = currencySymbol(sub.currency);
   const fmt = (v) => v.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -102,7 +103,7 @@ export function AccountDetailPanel({ account, sub, onClose, onEditParent }) {
             {account.owner_name || <span className="italic text-slate-400">Zonder naam</span>}
           </h2>
           <div className="flex items-center gap-2 mt-1.5 text-sm">
-            <span className="text-slate-500">Account onder</span>
+            <span className="text-slate-500">{entityLabels.detailHeader} onder</span>
             <span className="inline-flex items-center gap-1.5 min-w-0">
               <SubLogo vendor={sub.vendor} name={sub.name} size="xs" />
               <span className="text-slate-700 font-medium truncate">{sub.name}</span>
@@ -181,8 +182,8 @@ export function AccountDetailPanel({ account, sub, onClose, onEditParent }) {
         </div>
 
         {/* Footer met bewerken-knop — opent SubscriptionModal van de parent.
-            De gebruiker komt in de accounts-lijst van het parent abo en kan
-            daar de account-velden aanpassen. */}
+            De gebruiker komt in de entity-lijst van het parent abo en kan
+            daar de velden aanpassen. */}
         {isAdmin && onEditParent && (
           <div className="px-6 py-4 border-t border-slate-100 flex gap-3 bg-white">
             <button
@@ -190,7 +191,7 @@ export function AccountDetailPanel({ account, sub, onClose, onEditParent }) {
               className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:brightness-110 transition-all"
             >
               <PencilSquareIcon className="h-4 w-4" />
-              Account bewerken
+              {entityLabels.detailHeader} bewerken
             </button>
           </div>
         )}

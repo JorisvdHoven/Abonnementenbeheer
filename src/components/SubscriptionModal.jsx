@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { BILLING_PERIODS, toMonthly, getMonthlyFactor, activeAccountsNow } from '../lib/costUtils';
+import { BILLING_PERIODS, toMonthly, getMonthlyFactor, activeAccountsNow, getEntityLabels } from '../lib/costUtils';
 import { currencySymbol, formatDate } from '../lib/format';
 import { ChevronDownIcon, PlusIcon, TrashIcon, InformationCircleIcon, ArrowUturnLeftIcon } from '@heroicons/react/24/outline';
 import { SubLogo } from './SubLogo';
@@ -202,7 +202,17 @@ function AddableSelect({ label, value, options, onChange, onAdd, error, required
 // Accounts manager — inline list met add/remove
 // ============================================================
 
-function AccountsManager({ accounts, onChange, defaultCost, currency, period, parentStartDate, parentRenewalDate }) {
+function AccountsManager({ accounts, onChange, defaultCost, currency, period, parentStartDate, parentRenewalDate, entityLabels }) {
+  // Default voor backwards-compat: account-labels
+  const labels = entityLabels || {
+    addButton: 'Account toevoegen',
+    firstButton: 'Eerste account toevoegen',
+    emptyText: 'Nog geen accounts toegevoegd.',
+    nameLabel: 'Naam medewerker',
+    namePlaceholder: 'Naam',
+    plural: 'accounts',
+    singular: 'account',
+  };
   const [showArchive, setShowArchive] = useState(false);
 
   // Bij toevoegen: nieuwe account erft parent's start, vervaldatum, periode
@@ -315,11 +325,11 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period, pa
     <div className="rounded-lg border border-slate-200 bg-slate-50/50 overflow-hidden">
       <div className="px-3.5 py-2.5 bg-slate-100/70 flex items-center justify-between text-xs">
         <span className="font-medium text-slate-600 flex items-center gap-1.5">
-          {activeAccounts.length} account{activeAccounts.length !== 1 ? 's' : ''}
+          {activeAccounts.length} {activeAccounts.length === 1 ? labels.singular : labels.plural}
           <span className="relative group">
             <InformationCircleIcon className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 cursor-help transition-colors" />
             <span className="absolute left-0 top-5 z-20 hidden group-hover:block w-80 rounded-xl bg-slate-900 text-white text-xs p-3.5 shadow-xl ring-1 ring-white/10 leading-relaxed font-normal normal-case tracking-normal">
-              <p className="font-semibold mb-1.5">Hoe werken accounts?</p>
+              <p className="font-semibold mb-1.5">Hoe werken {labels.plural}?</p>
               <p className="text-slate-300 mb-2">
                 Elke account is een aparte licentie met een eigen <strong className="text-white">start- en vervaldatum</strong>.
               </p>
@@ -341,10 +351,10 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period, pa
       </div>
       {activeAccounts.length === 0 && archivedAccounts.length === 0 ? (
         <div className="p-6 text-center">
-          <p className="text-sm text-slate-400">Nog geen accounts toegevoegd.</p>
+          <p className="text-sm text-slate-400">{labels.emptyText}</p>
           <button type="button" onClick={addAccount} className="btn-primary text-sm mt-3 inline-flex items-center gap-1.5">
             <PlusIcon className="h-4 w-4" />
-            Eerste account toevoegen
+            {labels.firstButton}
           </button>
         </div>
       ) : (
@@ -355,10 +365,10 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period, pa
                 const key = keyOf(account);
                 return (
                   <div key={key} className="p-3 space-y-2.5">
-                    {/* Mobile-only header: account-nummer */}
+                    {/* Mobile-only header: entity-nummer */}
                     <div className="sm:hidden flex items-center justify-between">
                       <span className="text-[11px] uppercase tracking-wide font-semibold text-slate-400">
-                        Account {idx + 1}
+                        {labels.singular.charAt(0).toUpperCase() + labels.singular.slice(1)} {idx + 1}
                       </span>
                       <button
                         type="button"
@@ -371,17 +381,17 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period, pa
                       </button>
                     </div>
 
-                    {/* Rij 1: Avatar + Naam medewerker (full width) + archive-knop rechts */}
+                    {/* Rij 1: Avatar + Naam (full width) + archive-knop rechts */}
                     <div className="flex gap-2 items-end">
                       <div className="flex-1 min-w-0">
-                        <label className="block text-xs text-slate-500 mb-1">Naam medewerker</label>
+                        <label className="block text-xs text-slate-500 mb-1">{labels.nameLabel}</label>
                         <div className="flex items-center gap-2">
                           <AccountAvatar name={account.owner_name} />
                           <input
                             type="text"
                             value={account.owner_name || ''}
                             onChange={(e) => updateByKey(key, { owner_name: e.target.value })}
-                            placeholder="Naam"
+                            placeholder={labels.namePlaceholder}
                             className={`flex-1 min-w-0 ${inputClass}`}
                           />
                         </div>
@@ -526,7 +536,7 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period, pa
             className="w-full py-2.5 text-sm font-medium text-primary hover:bg-primary/5 transition-colors flex items-center justify-center gap-1.5 border-t border-slate-200"
           >
             <PlusIcon className="h-4 w-4" />
-            Account toevoegen
+            {labels.addButton}
           </button>
 
           {archivedAccounts.length > 0 && (
@@ -613,11 +623,14 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
   const isFlat       = billingModel === 'flat';
   const isPerSeat    = billingModel === 'per_seat';
   const isPerAccount = billingModel === 'per_account';
+  const isParking    = billingModel === 'parking';
   const isLicSeats   = billingModel === 'license_plus_seats';
   const isVariable   = billingModel === 'variable';
   const showSeats    = isPerSeat || isLicSeats;
   const showBase     = isLicSeats || isVariable;
-  const showAccounts = isPerAccount;
+  // Parking gedraagt zich als per_account: zelfde tabel + UI-flow, alleen labels anders.
+  const showAccounts = isPerAccount || isParking;
+  const entityLabels = getEntityLabels({ is_parking: isParking });
 
   useEffect(() => {
     if (subscription) {
@@ -660,6 +673,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
       // Derive billing model from existing data
       let model = 'flat';
       if (subscription.is_variable_cost) model = 'variable';
+      else if (subscription.is_parking) model = 'parking';
       else if (subAccounts.some(a => !a.archived_at)) model = 'per_account';
       else if (subscription.base_cost && parseFloat(subscription.base_cost) > 0) model = 'license_plus_seats';
       else if (subscription.cost_per_seat) model = 'per_seat';
@@ -881,21 +895,22 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
     const isOneOff = formData.cost_period === 'Eenmalig';
     const dataToSave = {
       ...formData,
-      account_owner: isPerAccount ? null : (formData.account_owner || null),
+      account_owner: (isPerAccount || isParking) ? null : (formData.account_owner || null),
       category: formData.category || 'Overig',
       cost: parseFloat(formData.cost) || 0,
       base_cost: showBase ? baseCostParsed : null,
       seats: showSeats ? (parseInt(formData.seats) || 1) : 1,
       cost_per_seat: showSeats,
       is_variable_cost: isVariable,
+      is_parking: isParking,
       start_date: formData.start_date || null,
       end_date: null,
-      // Bij per_account: renewal_date wordt bewaard als default-cycluslengte voor accounts
+      // Bij per_account / parking: renewal_date wordt bewaard als default-cycluslengte voor entities
       //   (voor 'Anders' is 'ie verplicht; voor andere periodes wordt 'ie auto-gevuld).
       // Bij Eenmalig: geen renewal_date en auto_renew = false (onlogisch anders).
-      // Parent auto_renew blijft uit bij per_account — accounts hebben eigen toggle.
+      // Parent auto_renew blijft uit bij per_account/parking — entities hebben eigen toggle.
       renewal_date: isOneOff ? null : (formData.renewal_date || null),
-      auto_renew: isPerAccount || isOneOff ? false : !!formData.auto_renew,
+      auto_renew: (isPerAccount || isParking || isOneOff) ? false : !!formData.auto_renew,
       created_by: user?.id
     };
 
@@ -906,13 +921,13 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
     if (savedSub?.id) {
       try {
         let accountsChanged = false;
-        if (isPerAccount) {
+        if (isPerAccount || isParking) {
           await persistAccounts(savedSub.id);
           accountsChanged = true;
         } else if (initialAccountsRef.current.length > 0) {
-          // Model gewijzigd weg van per-account → alle accounts verwijderen
+          // Model gewijzigd weg van per-account/parking → alle entities verwijderen
           const { error } = await supabase.from('subscription_accounts').delete().eq('subscription_id', savedSub.id);
-          if (error) throw new Error(`Accounts opschonen mislukt: ${error.message}`);
+          if (error) throw new Error(`Entities opschonen mislukt: ${error.message}`);
           accountsChanged = true;
         }
 
@@ -935,7 +950,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
     const baseFee = showBase ? (parseFloat(formData.base_cost) || 0) : 0;
     let variablePerPeriod = 0;
 
-    if (isPerAccount) {
+    if (isPerAccount || isParking) {
       // Gebruik dezelfde 'NU actief' definitie als de rest van de app
       // (countActiveAccountsNow, DetailPanel) — zodat preview matcht met
       // wat er in de lijst getoond wordt. Filtert ook archived_at uit.
@@ -1022,6 +1037,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
               <option value="flat">Vast bedrag</option>
               <option value="per_seat">Per gebruiker</option>
               <option value="per_account">Per persoonlijk account</option>
+              <option value="parking">Parkeren (per kenteken)</option>
               <option value="license_plus_seats">Vaste licentie + per gebruiker</option>
               <option value="variable">Op basis van verbruik</option>
             </select>
@@ -1029,6 +1045,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
               {isFlat        && <>Eén vast bedrag per facturatieperiode. Bv. Slack workspace, Netflix.</>}
               {isPerSeat     && <>Iedere gebruiker betaalt hetzelfde tarief × aantal gebruikers. Bv. Microsoft 365, Slack Pro.</>}
               {isPerAccount  && <>Eigen account per medewerker, optioneel met eigen prijs. Bv. LinkedIn Pro, Adobe.</>}
+              {isParking     && <>Parkeerabonnement met meerdere kentekens, elk met eigen prijs. Bv. Q-Park, Interparking.</>}
               {isLicSeats    && <>Vaste licentie naast variabele kosten per gebruiker. Bv. Carerix (€300 licentie + €10/gebruiker).</>}
               {isVariable    && <>Bedrag varieert per maand op basis van gebruik — vul een schatting in. Optioneel: voeg vaste licentiekosten toe als die er ook zijn. Bv. AWS, Stripe fees, OpenAI API.</>}
             </p>
@@ -1041,6 +1058,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
             const costLabel =
               isPerSeat        ? 'Prijs per gebruiker' :
               isPerAccount     ? 'Standaardprijs per account' :
+              isParking        ? 'Standaardprijs per kenteken' :
               isLicSeats       ? 'Prijs per gebruiker' :
               isVariable       ? 'Geschatte kosten' :
                                  'Bedrag';
@@ -1049,7 +1067,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
                 label={costLabel}
                 value={formData.cost}
                 error={fieldErrors.cost}
-                hint={isPerAccount ? 'Optioneel.' : undefined}
+                hint={(isPerAccount || isParking) ? 'Optioneel.' : undefined}
               >
                 <div className="flex">
                   <select name="currency" value={formData.currency} onChange={handleChange} className="px-2 py-2 border border-slate-200 border-r-0 rounded-l-md bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
@@ -1105,10 +1123,10 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
             );
 
             // Layout per kostenmodel — periode is hier verdwenen, staat nu bij Datums:
-            // - per_seat:           prijs | aantal                    (2 kol)
-            // - license_plus_seats: prijs | aantal | vaste licentie   (3 kol op één rij)
-            // - variable:           geschat | vaste licentie          (2 kol)
-            // - flat / per_account: prijs                             (1 kol, max-w-xs)
+            // - per_seat:                    prijs | aantal                    (2 kol)
+            // - license_plus_seats:          prijs | aantal | vaste licentie   (3 kol op één rij)
+            // - variable:                    geschat | vaste licentie          (2 kol)
+            // - flat / per_account / parking: prijs                            (1 kol, max-w-xs)
             if (isPerSeat) {
               return <FieldGrid>{costField}{seatsField}</FieldGrid>;
             }
@@ -1118,17 +1136,17 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
             if (isVariable) {
               return <FieldGrid>{costField}{baseField}</FieldGrid>;
             }
-            // flat & per_account: enkel het bedrag — beperk breedte zodat 't niet leeg-rechts oogt
+            // flat & per_account & parking: enkel het bedrag — beperk breedte zodat 't niet leeg-rechts oogt
             return <div className="max-w-xs">{costField}</div>;
           })()}
 
           {/* — Datums — periode hoort hier omdat ze samen de cyclus bepalen.
-              Bij per_account staan datums BOVEN de accounts: ze gelden als default
-              voor nieuwe accounts (zie hint hieronder). */}
+              Bij per_account / parking staan datums BOVEN de entities: ze gelden
+              als default voor nieuwe entities (zie hint hieronder). */}
           <SubLabel>Datums</SubLabel>
-          {isPerAccount && (
+          {(isPerAccount || isParking) && (
             <p className="text-xs text-slate-500 -mt-1">
-              Defaults voor nieuwe accounts.
+              Defaults voor nieuwe {entityLabels.plural}.
             </p>
           )}
 
@@ -1137,7 +1155,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
               label="Startdatum"
               value={formData.start_date}
               error={fieldErrors.start_date}
-              hint={!fieldErrors.start_date && !isPerAccount
+              hint={!fieldErrors.start_date && !isPerAccount && !isParking
                 ? 'Mag leeg gelaten worden.'
                 : undefined}
             >
@@ -1192,6 +1210,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
               period={formData.cost_period}
               parentStartDate={formData.start_date}
               parentRenewalDate={formData.renewal_date}
+              entityLabels={entityLabels}
             />
           )}
 
@@ -1221,8 +1240,8 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
             );
           })()}
 
-          {/* Auto-verlenging — niet bij per_account (per account ingesteld), uitgegrijsd bij Eenmalig */}
-          {!isPerAccount && (() => {
+          {/* Auto-verlenging — niet bij per_account / parking (per entity ingesteld), uitgegrijsd bij Eenmalig */}
+          {!isPerAccount && !isParking && (() => {
             const isOneOff = formData.cost_period === 'Eenmalig';
             const isCustom = formData.cost_period === 'Anders';
             // Hint wisselt op basis van periode + toggle stand. Bij standaard periodes
