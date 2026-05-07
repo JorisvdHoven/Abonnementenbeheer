@@ -143,13 +143,26 @@ const ACCOUNT_EXPORT_FIELDS = [
 
 const ACCOUNT_DEFAULT_SELECTED = new Set(['name','period','start_date','end_date','auto_renew','monthly_eur','is_charged','client_name','status']);
 
-// Modal voor het exporteren van kentekens/accounts onder één parent-abo.
-function AccountsExportModal({ sub, onExport, onClose }) {
+// Modal voor het exporteren van kentekens/accounts. Werkt voor 1 sub
+// (knop naast chevron) of meerdere subs (bulk-select in tabel).
+function AccountsExportModal({ subs, onExport, onClose }) {
   const [selected, setSelected] = useState(new Set(ACCOUNT_DEFAULT_SELECTED));
-  const labels = getEntityLabels(sub);
-  const liveAccounts = (sub.accounts || []).filter(a => !a.archived_at);
-  const archivedAccounts = (sub.accounts || []).filter(a => a.archived_at);
   const [includeArchived, setIncludeArchived] = useState(false);
+
+  // Verzamel alle accounts uit alle subs, met parent-referentie.
+  const allEntries = subs.flatMap(s => (s.accounts || []).map(acc => ({ acc, sub: s })));
+  const liveEntries = allEntries.filter(e => !e.acc.archived_at);
+  const archivedEntries = allEntries.filter(e => e.acc.archived_at);
+
+  // Pak labels van eerste sub voor titel — bij gemixt (account + parking)
+  // gebruiken we de generieke 'accounts/kentekens' fallback.
+  const allParking = subs.every(s => s.is_parking);
+  const allAccount = subs.every(s => !s.is_parking);
+  const labels = allParking
+    ? getEntityLabels({ is_parking: true })
+    : allAccount
+      ? getEntityLabels({ is_parking: false })
+      : { sectionTitle: 'Accounts en kentekens', singular: 'item', plural: 'items' };
 
   const toggle = (key) => setSelected(prev => {
     const next = new Set(prev);
@@ -160,7 +173,8 @@ function AccountsExportModal({ sub, onExport, onClose }) {
   const allSelected = selected.size === ACCOUNT_EXPORT_FIELDS.length;
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(ACCOUNT_EXPORT_FIELDS.map(f => f.key)));
 
-  const exportCount = includeArchived ? (liveAccounts.length + archivedAccounts.length) : liveAccounts.length;
+  const exportCount = includeArchived ? allEntries.length : liveEntries.length;
+  const isMulti = subs.length > 1;
 
   return (
     <Modal onClose={onClose} size="md" ariaLabel={`${labels.sectionTitle} exporteren`}>
@@ -168,13 +182,25 @@ function AccountsExportModal({ sub, onExport, onClose }) {
         <div>
           <h2 className="text-lg font-bold text-slate-900">{labels.sectionTitle} exporteren</h2>
           <p className="text-sm text-slate-500 mt-1">
-            <span className="font-medium text-slate-700">{sub.name}</span>
+            {isMulti ? (
+              <>
+                <span className="font-medium text-slate-700 tabular-nums">{subs.length}</span>
+                <span className="text-slate-500"> abonnementen</span>
+              </>
+            ) : (
+              <span className="font-medium text-slate-700">{subs[0].name}</span>
+            )}
             <span className="text-slate-300"> · </span>
             <span className="tabular-nums">{exportCount} {exportCount === 1 ? labels.singular : labels.plural}</span>
           </p>
+          {isMulti && (
+            <p className="text-xs text-slate-400 mt-1.5 truncate">
+              {subs.map(s => s.name).join(' · ')}
+            </p>
+          )}
         </div>
 
-        {archivedAccounts.length > 0 && (
+        {archivedEntries.length > 0 && (
           <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-600">
             <input
               type="checkbox"
@@ -182,7 +208,7 @@ function AccountsExportModal({ sub, onExport, onClose }) {
               onChange={(e) => setIncludeArchived(e.target.checked)}
               className="rounded border-slate-300 text-primary focus:ring-primary/30"
             />
-            Inclusief gearchiveerde {labels.plural} ({archivedAccounts.length})
+            Inclusief gearchiveerde {labels.plural} ({archivedEntries.length})
           </label>
         )}
 
@@ -764,7 +790,7 @@ function SubscriptionsPage() {
   const [detailAccount, setDetailAccount] = useState(null); // { account, sub }
   const [saveError, setSaveError] = useState(null);
   const [exportModalOpen, setExportModalOpen] = useState(false);
-  const [accountsExportSub, setAccountsExportSub] = useState(null); // sub voor accounts/kentekens-export
+  const [accountsExportSubs, setAccountsExportSubs] = useState(null); // array van subs voor accounts/kentekens-export
   const [selected, setSelected] = useState(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -914,28 +940,43 @@ function SubscriptionsPage() {
     setExportModalOpen(false);
   };
 
-  // Export accounts/kentekens van \u00E9\u00E9n parent-sub naar CSV
+  // Export accounts/kentekens van \u00E9\u00E9n of meerdere parent-subs naar CSV
   const handleExportAccountsCSV = (selectedFields, includeArchived) => {
-    if (!accountsExportSub) return;
-    const sub = accountsExportSub;
+    if (!accountsExportSubs?.length) return;
+    const subs = accountsExportSubs;
     const fields = ACCOUNT_EXPORT_FIELDS.filter(f => selectedFields.has(f.key));
     const headers = fields.map(f => f.label);
-    const accounts = (sub.accounts || []).filter(a => includeArchived || !a.archived_at);
-    const rows = accounts.map(acc =>
+    // Verzamel alle (acc, sub)-paren over alle parents heen
+    const entries = subs.flatMap(sub =>
+      (sub.accounts || [])
+        .filter(a => includeArchived || !a.archived_at)
+        .map(acc => ({ acc, sub }))
+    );
+    const rows = entries.map(({ acc, sub }) =>
       fields.map(f => `"${String(f.getValue(acc, sub) ?? '').replace(/"/g, '""')}"`)
     );
     const csv = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    // Bestandsnaam: 'kentekens' of 'accounts' op basis van entity, slug van subname
-    const labels = getEntityLabels(sub);
-    const slug = (sub.name || 'export').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    // Bestandsnaam: bij 1 sub \u2192 entity-slug-naam, bij meer \u2192 generiek
+    const date = formatDate(new Date()).replace(/\//g, '-');
+    let filename;
+    if (subs.length === 1) {
+      const labels = getEntityLabels(subs[0]);
+      const slug = (subs[0].name || 'export').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      filename = `${labels.plural}-${slug}-${date}.csv`;
+    } else {
+      const allParking = subs.every(s => s.is_parking);
+      const allAccount = subs.every(s => !s.is_parking);
+      const prefix = allParking ? 'kentekens' : allAccount ? 'accounts' : 'accounts-kentekens';
+      filename = `${prefix}-${subs.length}-abos-${date}.csv`;
+    }
     link.href = url;
-    link.download = `${labels.plural}-${slug}-${formatDate(new Date()).replace(/\//g, '-')}.csv`;
+    link.download = filename;
     link.click();
     URL.revokeObjectURL(url);
-    setAccountsExportSub(null);
+    setAccountsExportSubs(null);
   };
 
   if (loading) return <div className="p-6">Loading...</div>;
@@ -1064,7 +1105,7 @@ function SubscriptionsPage() {
             rows={tabFilteredRows}
             onView={handleView}
             onViewAccount={handleViewAccount}
-            onExportAccounts={setAccountsExportSub}
+            onExportAccounts={(sub) => setAccountsExportSubs([sub])}
             isSelectable={isAdmin}
             selected={selected}
             onToggleSelect={toggleSelect}
@@ -1095,11 +1136,11 @@ function SubscriptionsPage() {
         />
       )}
 
-      {accountsExportSub && (
+      {accountsExportSubs?.length > 0 && (
         <AccountsExportModal
-          sub={accountsExportSub}
+          subs={accountsExportSubs}
           onExport={handleExportAccountsCSV}
-          onClose={() => setAccountsExportSub(null)}
+          onClose={() => setAccountsExportSubs(null)}
         />
       )}
 
@@ -1142,7 +1183,15 @@ function SubscriptionsPage() {
       )}
 
       {/* Bulk action bar */}
-      {selected.size > 0 && (
+      {selected.size > 0 && (() => {
+        const selectedSubs = liveSubscriptions.filter(s => selected.has(s.id));
+        const subsWithAccounts = selectedSubs.filter(s => s.accounts && s.accounts.length > 0);
+        const exportLabel = subsWithAccounts.every(s => s.is_parking)
+          ? 'Kentekens exporteren'
+          : subsWithAccounts.every(s => !s.is_parking)
+            ? 'Accounts exporteren'
+            : 'Items exporteren';
+        return (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 backdrop-blur-xl rounded-full px-5 py-2.5 flex items-center gap-1 shadow-2xl ring-1 ring-white/10">
           <span className="text-sm font-medium text-white tabular-nums px-2">
             {selected.size} geselecteerd
@@ -1154,6 +1203,16 @@ function SubscriptionsPage() {
           >
             Wijzigen
           </button>
+          {subsWithAccounts.length > 0 && (
+            <button
+              onClick={() => setAccountsExportSubs(subsWithAccounts)}
+              className="text-sm font-medium text-slate-200 hover:text-white hover:bg-white/10 px-3 py-1.5 rounded-full transition-colors inline-flex items-center gap-1.5"
+            >
+              <ArrowDownTrayIcon className="h-3.5 w-3.5" />
+              {exportLabel}
+              <span className="text-xs text-slate-400 tabular-nums">({subsWithAccounts.length})</span>
+            </button>
+          )}
           <button
             onClick={() => setBulkDeleteOpen(true)}
             className="text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 px-3 py-1.5 rounded-full transition-colors"
@@ -1169,7 +1228,8 @@ function SubscriptionsPage() {
             ✕
           </button>
         </div>
-      )}
+        );
+      })()}
 
       {bulkEditOpen && (
         <BulkEditModal
