@@ -12,7 +12,7 @@ import Modal from '../components/Modal';
 import BulkEditModal from '../components/BulkEditModal';
 import MultiSelect from '../components/MultiSelect';
 import { toast } from '../lib/toast';
-import { toMonthly, toEurMonthly, getMonthlyFactor, deriveRenewalDate, effectiveAutoRenew, countActiveAccountsNow, getBillingModel, BILLING_MODELS, BILLING_MODEL_LABELS, getEntityLabels } from '../lib/costUtils';
+import { toMonthly, toEurMonthly, getMonthlyFactor, deriveRenewalDate, effectiveAutoRenew, countActiveAccountsNow, getBillingModel, BILLING_MODELS, BILLING_MODEL_LABELS } from '../lib/costUtils';
 import { formatDate, formatDateLong, currencySymbol } from '../lib/format';
 import {
   ChevronDownIcon,
@@ -171,9 +171,8 @@ function CostDisplay({ sub }) {
   if (!monthly) return <span className="text-slate-300">—</span>;
 
   const isVariable = sub.is_variable_cost;
-  const entityLabels = getEntityLabels(sub);
   const titleParts = [];
-  if (hasAccounts) titleParts.push(`${countActiveAccountsNow(sub.accounts)} actieve ${entityLabels.plural}`);
+  if (hasAccounts) titleParts.push(`${countActiveAccountsNow(sub.accounts)} actieve accounts`);
   if (sub.base_cost) titleParts.push(`incl. ${sym}${sub.base_cost} vaste licentie`);
   if (isVariable) titleParts.push('Verbruikskosten — bedrag varieert per maand');
 
@@ -255,9 +254,8 @@ function SubRow({ sub, onView, isSelectable, isSelected, onToggleSelect, isExpan
             <p className="font-semibold text-slate-900 text-sm truncate">{sub.name}</p>
             {(() => {
               const activeCount = hasAccounts ? countActiveAccountsNow(sub.accounts) : 0;
-              const labels = getEntityLabels(sub);
               const subtitle = hasAccounts
-                ? `${activeCount} actieve ${activeCount === 1 ? labels.singular : labels.plural}`
+                ? `${activeCount} actieve account${activeCount !== 1 ? 's' : ''}`
                 : null;
               return (sub.vendor || subtitle) && (
                 <p className="text-xs text-slate-400 mt-0.5 truncate">

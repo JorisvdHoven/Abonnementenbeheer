@@ -14,7 +14,7 @@ function periodLabel(period) {
     default:              return null;
   }
 }
-import { toMonthly, getMonthlyFactor, deriveRenewalDate, countActiveAccountsNow, activeAccountsNow, getBillingModel, BILLING_MODEL_LABELS, getEntityLabels } from '../lib/costUtils';
+import { toMonthly, getMonthlyFactor, deriveRenewalDate, countActiveAccountsNow, activeAccountsNow, getBillingModel, BILLING_MODEL_LABELS } from '../lib/costUtils';
 import { formatDate, formatDateLong, currencySymbol } from '../lib/format';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useLatestAuditFor } from '../hooks/useAuditLog';
@@ -146,7 +146,6 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete, onView
   const hasAccounts = (sub.accounts || []).length > 0;
   const hasLiveAccounts = liveAccounts.length > 0;
   const activeAccountCount = hasAccounts ? countActiveAccountsNow(sub.accounts) : 0;
-  const entityLabels = getEntityLabels(sub);
   const baseCost = parseFloat(sub.base_cost) || 0;
 
   // Bepalen welke velden relevant zijn op basis van het kostenmodel.
@@ -216,7 +215,7 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete, onView
               <>
                 <span className="text-slate-300">·</span>
                 <span className="text-xs font-medium text-slate-600 tabular-nums">
-                  {activeAccountCount} actieve {activeAccountCount === 1 ? entityLabels.singular : entityLabels.plural}
+                  {activeAccountCount} actieve account{activeAccountCount !== 1 ? 's' : ''}
                 </span>
               </>
             )}
@@ -281,7 +280,7 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete, onView
           </Section>
 
           {hasLiveAccounts && (
-            <Section title={`${entityLabels.sectionTitle} · ${liveAccounts.length}`}>
+            <Section title={`Accounts · ${liveAccounts.length}`}>
               <div>
                 {liveAccounts.map(acc => (
                   <AccountRow
