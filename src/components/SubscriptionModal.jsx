@@ -227,6 +227,8 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period, pa
       auto_renew: true,
       cost: '',
       archived_at: null,
+      is_charged_to_client: false,
+      client_name: '',
     }]);
   };
 
@@ -485,6 +487,43 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period, pa
                         </p>
                       </div>
                     )}
+
+                    {/* Rij 4 (alleen bij parking): doorberekend aan klant */}
+                    {labels.isParking && (
+                      <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2.5 space-y-2">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={!!account.is_charged_to_client}
+                            onChange={(e) => updateByKey(key, {
+                              is_charged_to_client: e.target.checked,
+                              // Bij uitvinken: client_name leeg gooien zodat 't niet rond blijft hangen
+                              client_name: e.target.checked ? account.client_name : '',
+                            })}
+                            className="rounded border-slate-300 text-primary focus:ring-primary/30"
+                          />
+                          <span className="text-sm font-medium text-slate-700">
+                            Doorberekend aan klant
+                          </span>
+                          <span className="text-xs text-slate-400">— factureren we dit kenteken door?</span>
+                        </label>
+                        {account.is_charged_to_client && (
+                          <div className="pl-6">
+                            <label className="block text-xs text-slate-500 mb-1">
+                              Klantnaam
+                              <span className={account.client_name ? 'text-slate-400 ml-1' : 'text-red-500 ml-1'}>*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={account.client_name || ''}
+                              onChange={(e) => updateByKey(key, { client_name: e.target.value })}
+                              placeholder="Bijv. Klant X B.V."
+                              className={inputClass}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -650,6 +689,8 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
           auto_renew: !!a.auto_renew,
           cost: a.cost ?? '',
           archived_at: a.archived_at ?? null,
+          is_charged_to_client: !!a.is_charged_to_client,
+          client_name: a.client_name || '',
         }));
         setAccounts(formatted);
         initialAccountsRef.current = formatted;
@@ -758,6 +799,11 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
     }
     if (formData.status === 'actief' && !formData.auto_renew && formData.renewal_date && new Date(formData.renewal_date) < new Date())
       errors.status = 'Status kan niet actief zijn als de vervaldatum al verlopen is en auto-verlenging uit staat.';
+    // Bij parking: als 'doorberekend aan klant' aan staat, moet er een klantnaam zijn
+    if (isParking) {
+      const missing = accounts.find(a => !a.archived_at && a.is_charged_to_client && !(a.client_name || '').trim());
+      if (missing) errors.accounts = `Klantnaam is verplicht voor kenteken${missing.owner_name ? ` "${missing.owner_name}"` : ''} (doorberekend aan klant).`;
+    }
     return errors;
   };
 
@@ -784,6 +830,8 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
       auto_renew: !!a.auto_renew,
       cost: a.cost === '' || a.cost === null || a.cost === undefined ? null : parseFloat(a.cost),
       archived_at: a.archived_at || null,
+      is_charged_to_client: !!a.is_charged_to_client,
+      client_name: a.is_charged_to_client ? (a.client_name || null) : null,
     }));
     if (toInsert.length > 0) {
       const { error } = await supabase.from('subscription_accounts').insert(toInsert);
@@ -803,7 +851,9 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
         || (orig.cost_period || null) !== (a.cost_period || null)
         || !!orig.auto_renew !== !!a.auto_renew
         || origCost !== newCost
-        || (orig.archived_at || null) !== (a.archived_at || null);
+        || (orig.archived_at || null) !== (a.archived_at || null)
+        || !!orig.is_charged_to_client !== !!a.is_charged_to_client
+        || (orig.client_name || '') !== (a.client_name || '');
       if (changed) {
         // eslint-disable-next-line no-await-in-loop
         const { error } = await supabase.from('subscription_accounts').update({
@@ -814,6 +864,8 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
           auto_renew: !!a.auto_renew,
           cost: newCost,
           archived_at: a.archived_at || null,
+          is_charged_to_client: !!a.is_charged_to_client,
+          client_name: a.is_charged_to_client ? (a.client_name || null) : null,
           updated_at: new Date().toISOString(),
         }).eq('id', a.id);
         if (error) throw new Error(`Account bijwerken mislukt: ${error.message}`);
@@ -826,6 +878,8 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
     const errors = validate();
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
+      // Account-niveau errors hebben geen field om aan te hangen — toon ze als toast
+      if (errors.accounts) toast.error(errors.accounts);
       return;
     }
     setFieldErrors({});

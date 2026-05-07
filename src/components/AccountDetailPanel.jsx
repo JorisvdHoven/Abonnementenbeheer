@@ -164,6 +164,21 @@ export function AccountDetailPanel({ account, sub, onClose, onEditParent }) {
             )}
           </Section>
 
+          {/* Doorberekening — alleen voor parking-model relevant */}
+          {entityLabels.isParking && (
+            <Section title="Doorberekening">
+              <DetailRow
+                label="Doorberekend aan klant"
+                value={account.is_charged_to_client
+                  ? <span className="inline-flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-green-500" />Ja</span>
+                  : 'Nee'}
+              />
+              {account.is_charged_to_client && (
+                <DetailRow label="Klantnaam" value={account.client_name} />
+              )}
+            </Section>
+          )}
+
         </div>
 
         {/* Footer met bewerken-knop — opent SubscriptionModal van de parent.
