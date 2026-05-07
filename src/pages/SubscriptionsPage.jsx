@@ -362,9 +362,17 @@ function AccountExpandedRow({ acc, sub, isSelectable, isLast, onView }) {
             <p className="text-sm font-medium text-slate-700 truncate">
               {acc.owner_name || <span className="italic text-slate-400">Zonder naam</span>}
             </p>
-            {period && period !== sub.cost_period && (
-              <p className="text-xs text-slate-400 truncate">{period}</p>
-            )}
+            <p className="text-xs text-slate-400 truncate">
+              {period && period !== sub.cost_period && <span>{period}</span>}
+              {period && period !== sub.cost_period && acc.is_charged_to_client && acc.client_name && (
+                <span className="mx-1.5 text-slate-300">·</span>
+              )}
+              {acc.is_charged_to_client && acc.client_name && (
+                <span title="Doorberekend aan klant" className="text-slate-500">
+                  → {acc.client_name}
+                </span>
+              )}
+            </p>
           </div>
         </div>
       </td>
