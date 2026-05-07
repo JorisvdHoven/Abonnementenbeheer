@@ -35,6 +35,14 @@ const TUSSENVOEGSELS = new Set([
 function getInitials(name) {
   const words = name.split(/\s+/).filter(Boolean);
   if (words.length === 0) return '';
+
+  // Codes / kentekens (single 'word' met streepjes of cijfers) → eerste 2
+  // alfanumerieke chars. 'AB-12-CD' → 'AB', '31-HKF-9' → '31', '1-ABC-15' → '1A'.
+  if (words.length === 1 && /[\d-]/.test(words[0])) {
+    const alphanum = words[0].replace(/[^a-zA-Z0-9]/g, '');
+    if (alphanum.length >= 2) return alphanum.slice(0, 2).toUpperCase();
+  }
+
   const significant = words.filter(w => !TUSSENVOEGSELS.has(w.toLowerCase()));
   // Edge case: alleen tussenvoegsels (zeer zeldzaam) — fall back op originele woorden
   const pool = significant.length > 0 ? significant : words;
