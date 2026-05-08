@@ -42,19 +42,23 @@ export function SubLogo({ vendor, name, size = 'sm' }) {
     ? 'h-16 w-16 text-2xl'
     : 'h-8 w-8 text-xs';
 
-  // Per merknaam meerdere domein-varianten × twee logo-bronnen.
-  // Order: clearbit (mooiste, 404t bij onbekend) → google favicon
-  // (laatste redmiddel; geeft 16×16 globe-default als domein niet bekend
-  // is — die filteren we hieronder weg). Name eerst, dan vendor.
-  // NB: DuckDuckGo's icon-API geeft een ">"-placeholder voor onbekende
-  // domeinen als HTTP 200, dus die kunnen we niet betrouwbaar gebruiken
-  // zonder andere logo's te overschrijven.
+  // Per merknaam meerdere domein-varianten × meerdere logo-bronnen.
+  // Order:
+  //   1. logo.dev — Clearbit's officiële opvolger (Clearbit is offline).
+  //      Vereist publishable token via env var. Beste dekking + kwaliteit.
+  //   2. clearbit — historische fallback. Werkt nog voor sommige merken,
+  //      404t bij onbekend.
+  //   3. google s2/favicons — laatste redmiddel, geeft 16×16 globe als
+  //      domein onbekend is (filter hieronder vangt die af).
+  // Name-domeinen eerst, dan vendor-domeinen.
+  const logoDevToken = import.meta.env.VITE_LOGO_DEV_TOKEN;
   const nameDomains = toDomains(name);
   const vendorDomains = toDomains(vendor);
   const buildSources = (d) => [
+    logoDevToken && `https://img.logo.dev/${d}?token=${logoDevToken}&size=128&format=png&retina=true`,
     `https://logo.clearbit.com/${d}`,
     `https://www.google.com/s2/favicons?domain=${d}&sz=128`,
-  ];
+  ].filter(Boolean);
   const sources = [
     ...nameDomains.flatMap(buildSources),
     ...vendorDomains.flatMap(buildSources),
