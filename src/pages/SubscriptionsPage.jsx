@@ -164,7 +164,10 @@ const ACCOUNT_EXPORT_FIELDS = [
 
 const ACCOUNT_EXPORT_GROUPS = ['Identificatie', 'Cyclus', 'Kosten', 'Doorberekening', 'Status'];
 
-const ACCOUNT_RECOMMENDED = new Set(['name','period','start_date','end_date','auto_renew','monthly_eur','is_charged','client_name','status']);
+// Aanbevolen-preset voor kentekens/accounts-export — minimaal nodig voor
+// klantfacturatie: wat is het kenteken, wat kost het per maand, looptijd
+// en aan wie wordt het doorberekend.
+const ACCOUNT_RECOMMENDED = new Set(['name','monthly_eur','start_date','end_date','client_name']);
 
 // ============================================================
 // UnifiedExportModal — één modal voor zowel abo-export als
