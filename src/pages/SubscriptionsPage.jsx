@@ -179,28 +179,41 @@ const ACCOUNT_RECOMMENDED = new Set(['name','period','start_date','end_date','au
 //   "Alle abonnementen")
 // ============================================================
 function UnifiedExportModal({ subs, scopeLabel, onClose }) {
-  // Subs met accounts (alleen die zijn relevant voor accounts-export)
-  const accountSubs = subs.filter(s => s.accounts?.length > 0);
+  // Subs met accounts (alleen die zijn relevant voor accounts-export).
+  // Bij gemixte scope (parking + per_account) tonen we alléén kentekens —
+  // de account-tab + export filtert dan naar is_parking=true subs.
+  // Reden: bij bulk-export is een gemixte rij-set vaak verwarrend; gebruiker
+  // wil meestal de kentekens (klantfactuur), accounts (medewerkers) zijn
+  // zelden interessant om bulk te exporteren.
+  const subsWithAnyAccounts = subs.filter(s => s.accounts?.length > 0);
+  const hasParking = subsWithAnyAccounts.some(s => s.is_parking);
+  const hasPerAccount = subsWithAnyAccounts.some(s => !s.is_parking);
+  const isMixed = hasParking && hasPerAccount;
+
+  // In mixed mode → alleen parking-subs in de account-export. In pure mode
+  // → alle account-houdende subs.
+  const accountSubs = isMixed
+    ? subsWithAnyAccounts.filter(s => s.is_parking)
+    : subsWithAnyAccounts;
   const accountsTypeAvailable = accountSubs.length > 0;
 
-  // Verzamel accounts voor counts + label-detectie
+  // Verzamel accounts (van de gefilterde set) voor counts + label-detectie
   const allAccounts = accountSubs.flatMap(s => (s.accounts || []).map(acc => ({ acc, sub: s })));
   const liveAccounts = allAccounts.filter(e => !e.acc.archived_at);
   const archivedAccounts = allAccounts.filter(e => e.acc.archived_at);
 
-  // Account-labels: parking / per_account / mix
-  const allParking = accountSubs.length > 0 && accountSubs.every(s => s.is_parking);
-  const allAccountModel = accountSubs.length > 0 && accountSubs.every(s => !s.is_parking);
-  const accountLabels = allParking
+  // Account-labels: bij parking (ook in mixed-mode want dan filteren we
+  // naar parking) → 'kentekens'. Bij pure per_account → 'accounts'.
+  const useParkingLabels = isMixed || (hasParking && !hasPerAccount);
+  const accountLabels = useParkingLabels
     ? getEntityLabels({ is_parking: true })
-    : allAccountModel
-      ? getEntityLabels({ is_parking: false })
-      : { sectionTitle: 'Accounts en kentekens', singular: 'item', plural: 'items' };
+    : getEntityLabels({ is_parking: false });
 
-  // Default type: als ALLE subs in scope accounts hebben, default 'accounts'
-  // (dat is wat de gebruiker meestal wil als ze dat type abo selecteren).
-  // Anders default 'subs'.
-  const defaultType = accountsTypeAvailable && subs.every(s => s.accounts?.length > 0)
+  // Default type: als ALLE subs in scope accounts hebben EN de scope niet
+  // gemixt is (parking + per_account door elkaar), default 'accounts'. In
+  // mixed mode default 'subs' zodat gebruiker bewust kiest voor de
+  // gefilterde kentekens-export.
+  const defaultType = accountsTypeAvailable && !isMixed && subs.every(s => s.accounts?.length > 0)
     ? 'accounts'
     : 'subs';
 
@@ -261,7 +274,10 @@ function UnifiedExportModal({ subs, scopeLabel, onClose }) {
       const slug = (accountSubs[0].name || 'export').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
       filename = `${labels.plural}-${slug}-${date}.csv`;
     } else {
-      const prefix = allParking ? 'kentekens' : allAccountModel ? 'accounts' : 'accounts-kentekens';
+      // accountSubs is in mixed-mode al gefilterd naar parking-only,
+      // dus we kunnen veilig 'kentekens' / 'accounts' kiezen op basis van
+      // wat er nog over is.
+      const prefix = accountSubs.every(s => s.is_parking) ? 'kentekens' : 'accounts';
       filename = `${prefix}-${accountSubs.length}-abos-${date}.csv`;
     }
     return { headers, rows, filename };
