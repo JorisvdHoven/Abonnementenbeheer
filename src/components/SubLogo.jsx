@@ -1,32 +1,56 @@
 import { useState, useEffect } from 'react';
 
+// Algemeen voorkomende TLD's. Wordt gebruikt om te detecteren of de input
+// al een domein is (bv. 'Werkzoeken.nl') in plaats van een merknaam.
+const KNOWN_TLDS = /\.(com|nl|org|io|net|co|de|be|fr|uk|eu|ai|app|dev|tech|cloud|shop|store|info)$/i;
+
 // Genereert kandidaat-domeinen voor een merknaam. We proberen meerdere
-// varianten omdat sommige merken een streepje in hun domein hebben
-// (q-park.com, track-and-trace.com) en andere niet (microsoft.com).
+// varianten omdat:
+// - Sommige merken al een TLD in hun naam hebben ('Werkzoeken.nl')
+// - Sommige hebben streepjes ('Q-Park' → q-park.com)
+// - Anderen niet ('Microsoft' → microsoft.com)
 // Volgorde maakt uit: meest specifieke variant eerst, dan fallbacks.
 function toDomains(str) {
   if (!str) return [];
   const cleaned = str.toLowerCase().trim()
     .replace(/\s+(b\.v\.|bv|inc|llc|ltd|gmbh|ag|sa)\.?$/i, '');
 
-  // Variant 1: streepjes behouden, spaties → streepje, rest gestript
+  const candidates = [];
+
+  // Variant 1: input bevat al een herkenbare TLD → gebruik direct.
+  //   'Werkzoeken.nl' → 'werkzoeken.nl'
+  //   'OpenAI.com'    → 'openai.com'
+  // Whitespace & speciale tekens (behalve punt en streepje) eruit, maar
+  // de domein-structuur blijft staan.
+  if (KNOWN_TLDS.test(cleaned)) {
+    const direct = cleaned.replace(/[^a-z0-9.-]/g, '').replace(/-+/g, '-');
+    if (direct) candidates.push(direct);
+  }
+
+  // Variant 2: streepjes behouden, spaties → streepje, rest gestript + .com
   //   'Q-Park'         → 'q-park.com'
   //   'Track & Trace'  → 'track-trace.com'
+  //   'Werkzoeken.nl'  → 'werkzoekennl.com' (TLD wordt hier gestript)
   const hyphenated = cleaned
-    .replace(/&/g, ' ')                  // '&' weg, niet vervangen door 'and'
-    .replace(/\s+/g, '-')                // spaties → streepje
-    .replace(/[^a-z0-9-]/g, '')          // overige rommel weg
-    .replace(/-+/g, '-')                 // dubbele streepjes opschonen
-    .replace(/^-+|-+$/g, '');            // randen trimmen
+    .replace(/&/g, ' ')
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  if (hyphenated) {
+    const candidate = `${hyphenated}.com`;
+    if (!candidates.includes(candidate)) candidates.push(candidate);
+  }
 
-  // Variant 2: alles aaneen geplakt zonder streepjes
+  // Variant 3: alles aaneen geplakt zonder streepjes + .com
   //   'Q-Park'         → 'qpark.com'
   //   'Track & Trace'  → 'tracktrace.com'
   const stripped = cleaned.replace(/[^a-z0-9]/g, '');
+  if (stripped) {
+    const candidate = `${stripped}.com`;
+    if (!candidates.includes(candidate)) candidates.push(candidate);
+  }
 
-  const candidates = [];
-  if (hyphenated) candidates.push(`${hyphenated}.com`);
-  if (stripped && stripped !== hyphenated) candidates.push(`${stripped}.com`);
   return candidates;
 }
 
