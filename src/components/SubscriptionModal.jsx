@@ -893,6 +893,15 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
       : (parseFloat(formData.base_cost) || 0);
 
     const isOneOff = formData.cost_period === 'Eenmalig';
+    // Auto-fill start_date voor nieuwe subs: als gebruiker 'm leeg laat,
+    // gebruiken we vandaag als impliciete startdatum. Zonder start_date
+    // kan 'Anders' periode geen factor afleiden en valt het abo uit de
+    // cashflow grafiek. Bestaande subs (met id) niet aanraken — als die
+    // leeg zijn, was dat een bewuste keus van de gebruiker.
+    const todayISO = new Date().toISOString().slice(0, 10);
+    const isNewSub = !subscription?.id;
+    const effectiveStartDate = formData.start_date
+      || (isNewSub ? todayISO : null);
     const dataToSave = {
       ...formData,
       account_owner: (isPerAccount || isParking) ? null : (formData.account_owner || null),
@@ -903,7 +912,7 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
       cost_per_seat: showSeats,
       is_variable_cost: isVariable,
       is_parking: isParking,
-      start_date: formData.start_date || null,
+      start_date: effectiveStartDate,
       end_date: null,
       // Bij per_account / parking: renewal_date wordt bewaard als default-cycluslengte voor entities
       //   (voor 'Anders' is 'ie verplicht; voor andere periodes wordt 'ie auto-gevuld).

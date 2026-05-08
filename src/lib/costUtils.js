@@ -35,16 +35,20 @@ export function deriveRenewalDate(sub) {
 }
 
 // Dynamische factor: gebruikt vaste tabel voor bekende periodes, en berekent
-// uit start→renewal voor 'Anders'. Retourneert 0 bij ongeldige Anders-data
-// (geen dates, of renewal <= start).
+// uit start→renewal voor 'Anders'.
+// Bij ongeldige Anders-data (geen dates, of renewal <= start) fallback naar
+// factor=1 (maandelijks-equivalent), zodat het abo tóch meetelt in de cashflow
+// in plaats van stilletjes uit de grafiek te vallen. Beste gok wanneer de
+// cycluslengte niet bepaalbaar is — gebruiker kan altijd dates invullen
+// voor exacte berekening.
 export function getMonthlyFactor(sub) {
   if (!sub?.cost_period) return 1;
   if (sub.cost_period === 'Anders') {
-    if (!sub.start_date || !sub.renewal_date) return 0;
+    if (!sub.start_date || !sub.renewal_date) return 1;
     const start = new Date(sub.start_date);
     const renewal = new Date(sub.renewal_date);
     const days = (renewal - start) / (1000 * 60 * 60 * 24);
-    if (days <= 0) return 0;
+    if (days <= 0) return 1;
     return (365 / 12) / days;
   }
   const match = BILLING_PERIODS.find(p => p.value === sub.cost_period);
