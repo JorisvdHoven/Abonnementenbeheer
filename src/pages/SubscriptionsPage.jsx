@@ -920,7 +920,7 @@ function ArchiveSection({ rows, totalCount, onView, onRestore, onPermanentDelete
 
 function SubscriptionsPage() {
   const { subscriptions, loading, addSubscription, updateSubscription, deleteSubscription, restoreSubscription, permanentlyDeleteSubscription, refetch } = useSubscriptions();
-  const { categories: settingCategories, types, departments: settingDepartments, addCategory, addType, addDepartment } = useSettings();
+  const { categories: settingCategories, types, departments: settingDepartments, exchangeRates, addCategory, addType, addDepartment } = useSettings();
   const { isAdmin } = useCurrentUser();
   const [statusTab, setStatusTab] = useState('actief'); // 'actief' | 'expiring' | 'verlopen' | 'opgezegd' | 'alles'
   const [search, setSearch] = useState('');
@@ -1076,9 +1076,13 @@ function SubscriptionsPage() {
   if (loading) return <div className="p-6">Loading...</div>;
 
   // Tellingen + totalen op basis van LIVE subs (gearchiveerd telt niet mee)
+  // toEurMonthly is account-aware (somt kentekens/accounts bij per_account
+  // & parking) en past FX toe voor non-EUR. Parent.cost * factor zou
+  // alle multi-account subs onderwaarderen — die hebben hun cost in de
+  // accounts, niet op de parent.
   const totalMonthly = liveSubscriptions
     .filter(s => s.status === 'actief')
-    .reduce((sum, s) => sum + ((s.cost || 0) * getMonthlyFactor(s)), 0);
+    .reduce((sum, s) => sum + toEurMonthly(s, exchangeRates), 0);
 
   const activeCount = liveSubscriptions.filter(s => s.status === 'actief').length;
   const filterSelectClass = "px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors hover:border-slate-300";
