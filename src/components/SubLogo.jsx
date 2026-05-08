@@ -42,31 +42,41 @@ export function SubLogo({ vendor, name, size = 'sm' }) {
     ? 'h-16 w-16 text-2xl'
     : 'h-8 w-8 text-xs';
 
-  // Probeer per merknaam meerdere domein-varianten (met/zonder streepje)
-  // en per variant zowel Clearbit (mooie logo's) als Google favicon
-  // (fallback). Order: name > vendor; binnen elk: clearbit > favicon.
+  // Per merknaam meerdere domein-varianten × meerdere logo-bronnen.
+  // Order: clearbit (mooiste) → duckduckgo (404t cleaner dan google) →
+  // google favicon (laatste redmiddel, geeft default globe als domein niet
+  // bekend is). Name eerst, dan vendor.
   const nameDomains = toDomains(name);
   const vendorDomains = toDomains(vendor);
+  const buildSources = (d) => [
+    `https://logo.clearbit.com/${d}`,
+    `https://icons.duckduckgo.com/ip3/${d}.ico`,
+    `https://www.google.com/s2/favicons?domain=${d}&sz=128`,
+  ];
   const sources = [
-    ...nameDomains.flatMap(d => [
-      `https://logo.clearbit.com/${d}`,
-      `https://www.google.com/s2/favicons?domain=${d}&sz=128`,
-    ]),
-    ...vendorDomains.flatMap(d => [
-      `https://logo.clearbit.com/${d}`,
-      `https://www.google.com/s2/favicons?domain=${d}&sz=128`,
-    ]),
+    ...nameDomains.flatMap(buildSources),
+    ...vendorDomains.flatMap(buildSources),
   ];
 
   if (sources.length > 0 && srcIndex < sources.length) {
+    const currentSrc = sources[srcIndex];
+    const isGoogleFavicon = currentSrc.includes('google.com/s2/favicons');
     return (
       <img
-        key={sources[srcIndex]}
-        src={sources[srcIndex]}
+        key={currentSrc}
+        src={currentSrc}
         alt={vendor || name}
         onError={() => setSrcIndex(i => i + 1)}
         onLoad={(e) => {
-          if (e.target.naturalWidth <= 16 && e.target.naturalHeight <= 16) {
+          // Fail-fast op echt-broken images (0×0)
+          if (e.target.naturalWidth === 0) {
+            setSrcIndex(i => i + 1);
+            return;
+          }
+          // Google geeft een 16×16 'globe'-default voor onbekende domeinen
+          // — die filteren we expliciet weg. Andere bronnen (Clearbit, DDG)
+          // 404'en netjes bij onbekend, dus daar trustden we de afmeting.
+          if (isGoogleFavicon && e.target.naturalWidth <= 16 && e.target.naturalHeight <= 16) {
             setSrcIndex(i => i + 1);
           }
         }}
