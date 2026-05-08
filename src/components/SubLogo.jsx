@@ -55,7 +55,11 @@ export function SubLogo({ vendor, name, size = 'sm' }) {
   const nameDomains = toDomains(name);
   const vendorDomains = toDomains(vendor);
   const buildSources = (d) => [
-    logoDevToken && `https://img.logo.dev/${d}?token=${logoDevToken}&size=128&format=png&retina=true`,
+    // fallback=404 voorkomt dat Logo.dev een gegenereerd monogram (T/A/D/...
+    // op witte cirkel) terugstuurt voor onbekende domeinen — dat zou de
+    // Clearbit/Google fallback overschaduwen. Met 404 cycle't de img-tag
+    // netjes door naar de volgende bron.
+    logoDevToken && `https://img.logo.dev/${d}?token=${logoDevToken}&size=128&format=png&retina=true&fallback=404`,
     `https://logo.clearbit.com/${d}`,
     `https://www.google.com/s2/favicons?domain=${d}&sz=128`,
   ].filter(Boolean);
