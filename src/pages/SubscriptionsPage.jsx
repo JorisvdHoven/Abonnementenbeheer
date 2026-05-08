@@ -459,6 +459,13 @@ function SubRow({ sub, onView, isSelectable, isSelected, onToggleSelect, isExpan
               <span title="Verlengt automatisch" className="text-primary text-base font-semibold leading-none">↻</span>
             )}
           </div>
+        ) : effectiveAutoRenew(sub) && sub.status === 'actief' ? (
+          // Geen einddatum bekend (bv. abo zonder startdatum) maar wél auto-verlenging:
+          // toon dat expliciet zodat de gebruiker niet hoeft te raden.
+          <span title="Verlengt automatisch" className="inline-flex items-center gap-1.5 text-xs text-primary font-medium">
+            <span className="text-base font-semibold leading-none">↻</span>
+            Verlengt automatisch
+          </span>
         ) : (
           <span className="text-slate-300 text-xs">—</span>
         )}
