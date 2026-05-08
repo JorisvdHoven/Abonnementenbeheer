@@ -367,7 +367,7 @@ function StatusTabs({ counts, value, onChange }) {
   );
 }
 
-function SubRow({ sub, onView, isSelectable, isSelected, onToggleSelect, isExpanded, onToggleExpand, onExportAccounts }) {
+function SubRow({ sub, onView, isSelectable, isSelected, onToggleSelect, isExpanded, onToggleExpand }) {
   // Toon-vervaldatum: bestaande renewal_date óf afgeleid uit start + periode
   // zodat een leeg-DB-veld toch een logische waarde toont in de tabel.
   const renewalDate = deriveRenewalDate(sub);
@@ -410,31 +410,20 @@ function SubRow({ sub, onView, isSelectable, isSelected, onToggleSelect, isExpan
             })()}
           </div>
           {hasAccounts && (
-            <>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onExportAccounts?.(sub); }}
-                className="flex-shrink-0 h-7 w-7 inline-flex items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-all"
-                title={`${getEntityLabels(sub).sectionTitle} exporteren als CSV`}
-                aria-label={`${getEntityLabels(sub).sectionTitle} exporteren`}
-              >
-                <ArrowDownTrayIcon className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onToggleExpand(sub.id); }}
-                className={`flex-shrink-0 h-7 w-7 inline-flex items-center justify-center rounded-md transition-all ${
-                  isExpanded
-                    ? 'bg-slate-200 text-slate-700'
-                    : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
-                }`}
-                title={isExpanded ? `${getEntityLabels(sub).sectionTitle} verbergen` : `${getEntityLabels(sub).sectionTitle} tonen`}
-                aria-label={isExpanded ? 'Inklappen' : 'Uitklappen'}
-                aria-expanded={isExpanded}
-              >
-                <ChevronDownIcon className={`h-4 w-4 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onToggleExpand(sub.id); }}
+              className={`flex-shrink-0 h-7 w-7 inline-flex items-center justify-center rounded-md transition-all ${
+                isExpanded
+                  ? 'bg-slate-200 text-slate-700'
+                  : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
+              }`}
+              title={isExpanded ? `${getEntityLabels(sub).sectionTitle} verbergen` : `${getEntityLabels(sub).sectionTitle} tonen`}
+              aria-label={isExpanded ? 'Inklappen' : 'Uitklappen'}
+              aria-expanded={isExpanded}
+            >
+              <ChevronDownIcon className={`h-4 w-4 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+            </button>
           )}
         </div>
       </td>
@@ -569,7 +558,7 @@ const STATUS_ORDER = { actief: 0, verlopen: 1, opgezegd: 2 };
 // Bij 'alles' wordt secondary-sort op sub.status toegepast zodat
 // actieve subs altijd boven verlopen/opgezegde komen, ongeacht de
 // gekozen primary sort.
-function SubscriptionsTable({ rows, onView, onViewAccount, onExportAccounts, isSelectable, selected, onToggleSelect, onToggleAll, isAllesTab }) {
+function SubscriptionsTable({ rows, onView, onViewAccount, isSelectable, selected, onToggleSelect, onToggleAll, isAllesTab }) {
   // Default: geen sortering — rij-volgorde uit DB / filter behouden.
   // Bij klik op kolom-header: kosten gaat default naar desc (hoog→laag),
   // andere kolommen naar asc (logische default).
@@ -682,7 +671,6 @@ function SubscriptionsTable({ rows, onView, onViewAccount, onExportAccounts, isS
                   onToggleSelect={onToggleSelect}
                   isExpanded={isExpanded}
                   onToggleExpand={toggleExpanded}
-                  onExportAccounts={onExportAccounts}
                 />
                 {isExpanded && liveAccounts.map((acc, idx) => (
                   <AccountExpandedRow
@@ -1112,7 +1100,6 @@ function SubscriptionsPage() {
             rows={tabFilteredRows}
             onView={handleView}
             onViewAccount={handleViewAccount}
-            onExportAccounts={(sub) => setAccountsExportSubs([sub])}
             isSelectable={isAdmin}
             selected={selected}
             onToggleSelect={toggleSelect}
