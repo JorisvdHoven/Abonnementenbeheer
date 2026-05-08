@@ -12,7 +12,7 @@ import Modal from '../components/Modal';
 import BulkEditModal from '../components/BulkEditModal';
 import MultiSelect from '../components/MultiSelect';
 import { toast } from '../lib/toast';
-import { toMonthly, toEurMonthly, getMonthlyFactor, deriveRenewalDate, effectiveAutoRenew, countActiveAccountsNow, getBillingModel, BILLING_MODELS, BILLING_MODEL_LABELS, getEntityLabels } from '../lib/costUtils';
+import { toMonthly, toEurMonthly, getMonthlyFactor, deriveRenewalDate, effectiveAutoRenew, allActiveAutoRenew, countActiveAccountsNow, getBillingModel, BILLING_MODELS, BILLING_MODEL_LABELS, getEntityLabels } from '../lib/costUtils';
 import { formatDate, formatDateLong, currencySymbol } from '../lib/format';
 import {
   ChevronDownIcon,
@@ -454,18 +454,18 @@ function SubRow({ sub, onView, isSelectable, isSelected, onToggleSelect, isExpan
       <td className="px-5 py-3 hidden lg:table-cell">
         {renewalDate ? (
           <div className="inline-flex items-center gap-2">
-            <span className="text-sm text-slate-700 tabular-nums">{formatDateLong(renewalDate)}</span>
-            {effectiveAutoRenew(sub) && sub.status === 'actief' && (
+            <span className="text-sm text-slate-700 tabular-nums">{formatDate(renewalDate)}</span>
+            {/* ↻ alleen als ALLE entities auto-verlengen — anders misleidend
+                (bv. 1 van 2 kentekens met auto-renew zou de hele rij doen
+                lijken alsof alles automatisch doorloopt). */}
+            {allActiveAutoRenew(sub) && sub.status === 'actief' && (
               <span title="Verlengt automatisch" className="text-primary text-base font-semibold leading-none">↻</span>
             )}
           </div>
-        ) : effectiveAutoRenew(sub) && sub.status === 'actief' ? (
-          // Geen einddatum bekend (bv. abo zonder startdatum) maar wél auto-verlenging:
-          // toon dat expliciet zodat de gebruiker niet hoeft te raden.
-          <span title="Verlengt automatisch" className="inline-flex items-center gap-1.5 text-xs text-primary font-medium">
-            <span className="text-base font-semibold leading-none">↻</span>
-            Verlengt automatisch
-          </span>
+        ) : allActiveAutoRenew(sub) && sub.status === 'actief' ? (
+          // Geen einddatum bekend maar wél (volledig) auto-verlenging:
+          // toon alleen het ↻ icoon (subtiel, hover voor uitleg).
+          <span title="Verlengt automatisch" className="text-primary text-base font-semibold leading-none">↻</span>
         ) : (
           <span className="text-slate-300 text-xs">—</span>
         )}
@@ -546,7 +546,7 @@ function AccountExpandedRow({ acc, sub, isSelectable, isLast, onView }) {
       <td className="px-5 py-2.5 hidden lg:table-cell">
         {end ? (
           <div className="inline-flex items-center gap-2">
-            <span className="text-sm text-slate-500 tabular-nums">{formatDateLong(end)}</span>
+            <span className="text-sm text-slate-500 tabular-nums">{formatDate(end)}</span>
             {acc.auto_renew && (
               <span title="Verlengt automatisch" className="text-primary text-sm font-semibold leading-none">↻</span>
             )}
