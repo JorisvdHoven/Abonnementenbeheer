@@ -26,31 +26,116 @@ import {
   TrashIcon,
 } from '@heroicons/react/24/outline';
 
+// Velden + groepering. 'group' bepaalt onder welke sectie het veld valt
+// in de modal. Volgorde van groups in GROUPS-array bepaalt sectie-volgorde.
 const EXPORT_FIELDS = [
-  { key: 'name',         label: 'Naam',              getValue: s => s.name ?? '' },
-  { key: 'vendor',       label: 'Leverancier',        getValue: s => s.vendor ?? '' },
-  { key: 'category',     label: 'Categorie',          getValue: s => s.category ?? '' },
-  { key: 'department',   label: 'Afdeling',           getValue: s => s.department ?? '' },
-  { key: 'billing_model',label: 'Kostenmodel',        getValue: s => BILLING_MODEL_LABELS[getBillingModel(s)] ?? '' },
-  { key: 'status',       label: 'Status',             getValue: s => s.status ?? '' },
-  { key: 'cost',         label: 'Kosten',             getValue: s => s.cost != null ? s.cost.toString().replace('.', ',') : '' },
-  { key: 'currency',     label: 'Valuta',             getValue: s => s.currency ?? 'EUR' },
-  { key: 'cost_period',  label: 'Facturatieperiode',  getValue: s => s.cost_period ?? '' },
-  { key: 'seats',        label: 'Gebruikers',         getValue: s => s.seats ?? '' },
-  { key: 'cost_per_seat',label: 'Prijs per gebruiker',getValue: s => s.cost_per_seat ? 'Ja' : 'Nee' },
-  { key: 'start_date',   label: 'Startdatum',         getValue: s => formatDate(s.start_date) },
-  { key: 'renewal_date', label: 'Vervaldatum',        getValue: s => formatDate(s.renewal_date) },
-  { key: 'auto_renew',   label: 'Auto-verlenging',    getValue: s => s.auto_renew ? 'Ja' : 'Nee' },
-  { key: 'contact_name', label: 'Contactpersoon',     getValue: s => s.contact_name ?? '' },
-  { key: 'contact_email',label: 'Contact e-mail',     getValue: s => s.contact_email ?? '' },
-  { key: 'contact_phone',label: 'Contact telefoon',   getValue: s => s.contact_phone ?? '' },
-  { key: 'notes',        label: 'Notities',           getValue: s => s.notes ?? '' },
+  { key: 'name',         label: 'Naam',              group: 'Basis',     getValue: s => s.name ?? '' },
+  { key: 'vendor',       label: 'Leverancier',        group: 'Basis',     getValue: s => s.vendor ?? '' },
+  { key: 'category',     label: 'Categorie',          group: 'Basis',     getValue: s => s.category ?? '' },
+  { key: 'department',   label: 'Afdeling',           group: 'Basis',     getValue: s => s.department ?? '' },
+  { key: 'billing_model',label: 'Kostenmodel',        group: 'Status',    getValue: s => BILLING_MODEL_LABELS[getBillingModel(s)] ?? '' },
+  { key: 'status',       label: 'Status',             group: 'Status',    getValue: s => s.status ?? '' },
+  { key: 'cost',         label: 'Kosten',             group: 'Kosten',    getValue: s => s.cost != null ? s.cost.toString().replace('.', ',') : '' },
+  { key: 'currency',     label: 'Valuta',             group: 'Kosten',    getValue: s => s.currency ?? 'EUR' },
+  { key: 'cost_period',  label: 'Facturatieperiode',  group: 'Kosten',    getValue: s => s.cost_period ?? '' },
+  { key: 'seats',        label: 'Gebruikers',         group: 'Kosten',    getValue: s => s.seats ?? '' },
+  { key: 'cost_per_seat',label: 'Prijs per gebruiker',group: 'Kosten',    getValue: s => s.cost_per_seat ? 'Ja' : 'Nee' },
+  { key: 'start_date',   label: 'Startdatum',         group: 'Cyclus',    getValue: s => formatDate(s.start_date) },
+  { key: 'renewal_date', label: 'Vervaldatum',        group: 'Cyclus',    getValue: s => formatDate(s.renewal_date) },
+  { key: 'auto_renew',   label: 'Auto-verlenging',    group: 'Cyclus',    getValue: s => s.auto_renew ? 'Ja' : 'Nee' },
+  { key: 'contact_name', label: 'Contactpersoon',     group: 'Contact',   getValue: s => s.contact_name ?? '' },
+  { key: 'contact_email',label: 'Contact e-mail',     group: 'Contact',   getValue: s => s.contact_email ?? '' },
+  { key: 'contact_phone',label: 'Contact telefoon',   group: 'Contact',   getValue: s => s.contact_phone ?? '' },
+  { key: 'notes',        label: 'Notities',           group: 'Overig',    getValue: s => s.notes ?? '' },
 ];
 
-const DEFAULT_SELECTED = new Set(['name','vendor','category','department','billing_model','status','cost','currency','cost_period','renewal_date']);
+const EXPORT_GROUPS = ['Basis', 'Status', 'Kosten', 'Cyclus', 'Contact', 'Overig'];
+
+// Aanbevolen-preset: meest gebruikte velden voor abo-export.
+const EXPORT_RECOMMENDED = new Set(['name','vendor','category','department','billing_model','status','cost','currency','cost_period','renewal_date']);
+
+// ----- Field-picker primitives — gedeeld tussen beide export-modals -------
+
+// Pill-style toggle voor één veld. Visueel rustiger dan checkbox-rij en
+// makkelijker te scannen. Selected = primary border + tint, unselected =
+// witte achtergrond met subtle border.
+function FieldPill({ label, selected, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+        selected
+          ? 'bg-primary/10 text-primary border-primary/40 hover:bg-primary/15'
+          : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300 hover:text-slate-900'
+      }`}
+      aria-pressed={selected}
+    >
+      <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-all ${
+        selected ? 'bg-primary border-primary' : 'border-slate-300'
+      }`}>
+        {selected && (
+          <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M2.5 6.5L5 9l4.5-5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+      </span>
+      {label}
+    </button>
+  );
+}
+
+// Render één groep velden als pill-rij met sectie-header.
+function FieldGroup({ title, fields, selected, onToggle }) {
+  if (fields.length === 0) return null;
+  return (
+    <div>
+      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">{title}</h4>
+      <div className="flex flex-wrap gap-1.5">
+        {fields.map(f => (
+          <FieldPill
+            key={f.key}
+            label={f.label}
+            selected={selected.has(f.key)}
+            onClick={() => onToggle(f.key)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Preset-chips: snelle keuze tussen Niets / Aanbevolen / Alles.
+function PresetBar({ presets, currentSize, totalSize, onApply }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      {presets.map(p => {
+        const isActive = p.size === currentSize && (
+          p.size === 0 || p.size === totalSize ||
+          (p.recommended && currentSize === p.size)
+        );
+        return (
+          <button
+            key={p.label}
+            type="button"
+            onClick={() => onApply(p.set)}
+            className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+              isActive
+                ? 'bg-slate-900 text-white'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            {p.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 function ExportModal({ count, onExport, onClose }) {
-  const [selected, setSelected] = useState(new Set(DEFAULT_SELECTED));
+  // Default leeg — gebruiker kiest actief welke velden mee moeten.
+  const [selected, setSelected] = useState(new Set());
 
   const toggle = (key) => setSelected(prev => {
     const next = new Set(prev);
@@ -58,55 +143,62 @@ function ExportModal({ count, onExport, onClose }) {
     return next;
   });
 
-  const allSelected = selected.size === EXPORT_FIELDS.length;
-  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(EXPORT_FIELDS.map(f => f.key)));
+  const presets = [
+    { label: 'Niets',      set: new Set(),                                      size: 0 },
+    { label: 'Aanbevolen', set: new Set(EXPORT_RECOMMENDED), recommended: true, size: EXPORT_RECOMMENDED.size },
+    { label: 'Alles',      set: new Set(EXPORT_FIELDS.map(f => f.key)),         size: EXPORT_FIELDS.length },
+  ];
 
   return (
     <Modal onClose={onClose} size="md" ariaLabel="CSV exporteren">
-      <div className="p-6 space-y-5">
-        <div>
+      <div className="flex flex-col max-h-[85vh]">
+        {/* Header */}
+        <div className="px-6 pt-6 pb-4 border-b border-slate-100">
           <h2 className="text-lg font-bold text-slate-900">CSV exporteren</h2>
           <p className="text-sm text-slate-500 mt-1 tabular-nums">
-            {count} abonnement{count !== 1 ? 'en' : ''} worden geëxporteerd.
+            {count} abonnement{count !== 1 ? 'en' : ''}
           </p>
         </div>
 
-        <div className="flex justify-between items-center">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Velden</span>
-          <button onClick={toggleAll} className="text-xs font-medium text-primary hover:underline">
-            {allSelected ? 'Deselecteer alles' : 'Selecteer alles'}
-          </button>
-        </div>
+        {/* Body — scrollable */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Velden</span>
+            <PresetBar presets={presets} currentSize={selected.size} totalSize={EXPORT_FIELDS.length} onApply={setSelected} />
+          </div>
 
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-          {EXPORT_FIELDS.map(field => (
-            <label key={field.key} className="flex items-center gap-2 cursor-pointer group">
-              <input
-                type="checkbox"
-                checked={selected.has(field.key)}
-                onChange={() => toggle(field.key)}
-                className="rounded border-slate-300 text-primary focus:ring-primary/30"
-              />
-              <span className="text-sm text-slate-600 group-hover:text-slate-900 transition-colors">{field.label}</span>
-            </label>
+          {EXPORT_GROUPS.map(group => (
+            <FieldGroup
+              key={group}
+              title={group}
+              fields={EXPORT_FIELDS.filter(f => f.group === group)}
+              selected={selected}
+              onToggle={toggle}
+            />
           ))}
         </div>
 
-        <div className="flex justify-end gap-3 pt-1">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg text-sm font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-colors"
-          >
-            Annuleren
-          </button>
-          <button
-            onClick={() => onExport(selected)}
-            disabled={selected.size === 0}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white bg-primary shadow-sm hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <ArrowDownTrayIcon className="h-4 w-4" />
-            Exporteren ({selected.size})
-          </button>
+        {/* Sticky footer */}
+        <div className="px-6 py-4 border-t border-slate-100 bg-white flex items-center justify-between gap-3">
+          <span className="text-xs text-slate-500 tabular-nums">
+            {selected.size} van {EXPORT_FIELDS.length} velden geselecteerd
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-colors"
+            >
+              Annuleren
+            </button>
+            <button
+              onClick={() => onExport(selected)}
+              disabled={selected.size === 0}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white bg-primary shadow-sm hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <ArrowDownTrayIcon className="h-4 w-4" />
+              Exporteren
+            </button>
+          </div>
         </div>
       </div>
     </Modal>
@@ -116,15 +208,15 @@ function ExportModal({ count, onExport, onClose }) {
 // Velden voor account/kenteken-export. getValue krijgt zowel acc als sub
 // zodat we effectieve waardes (account-eigen of inherit van parent) kunnen berekenen.
 const ACCOUNT_EXPORT_FIELDS = [
-  { key: 'name',         label: 'Kenteken / Naam',     getValue: (a)    => a.owner_name ?? '' },
-  { key: 'parent_name',  label: 'Abonnement',          getValue: (a, s) => s.name ?? '' },
-  { key: 'parent_vendor',label: 'Leverancier',         getValue: (a, s) => s.vendor ?? '' },
-  { key: 'period',       label: 'Facturatieperiode',   getValue: (a, s) => a.cost_period || s.cost_period || '' },
-  { key: 'start_date',   label: 'Startdatum',          getValue: (a, s) => formatDate(a.start_date || s.start_date) },
-  { key: 'end_date',     label: 'Einddatum periode',   getValue: (a, s) => formatDate(a.end_date || deriveRenewalDate(s)) },
-  { key: 'auto_renew',   label: 'Auto-verlenging',     getValue: (a)    => a.auto_renew ? 'Ja' : 'Nee' },
-  { key: 'cost',         label: 'Eigen prijs',         getValue: (a)    => (a.cost !== null && a.cost !== undefined && a.cost !== '') ? String(a.cost).replace('.', ',') : '' },
-  { key: 'monthly_eur',  label: 'Maandkosten (EUR)',   getValue: (a, s) => {
+  { key: 'name',         label: 'Kenteken / Naam',     group: 'Identificatie', getValue: (a)    => a.owner_name ?? '' },
+  { key: 'parent_name',  label: 'Abonnement',          group: 'Identificatie', getValue: (a, s) => s.name ?? '' },
+  { key: 'parent_vendor',label: 'Leverancier',         group: 'Identificatie', getValue: (a, s) => s.vendor ?? '' },
+  { key: 'period',       label: 'Facturatieperiode',   group: 'Cyclus',        getValue: (a, s) => a.cost_period || s.cost_period || '' },
+  { key: 'start_date',   label: 'Startdatum',          group: 'Cyclus',        getValue: (a, s) => formatDate(a.start_date || s.start_date) },
+  { key: 'end_date',     label: 'Einddatum periode',   group: 'Cyclus',        getValue: (a, s) => formatDate(a.end_date || deriveRenewalDate(s)) },
+  { key: 'auto_renew',   label: 'Auto-verlenging',     group: 'Cyclus',        getValue: (a)    => a.auto_renew ? 'Ja' : 'Nee' },
+  { key: 'cost',         label: 'Eigen prijs',         group: 'Kosten',        getValue: (a)    => (a.cost !== null && a.cost !== undefined && a.cost !== '') ? String(a.cost).replace('.', ',') : '' },
+  { key: 'monthly_eur',  label: 'Maandkosten (EUR)',   group: 'Kosten',        getValue: (a, s) => {
       const period = a.cost_period || s.cost_period;
       const start = a.start_date || s.start_date;
       const end = a.end_date || deriveRenewalDate(s);
@@ -134,19 +226,22 @@ const ACCOUNT_EXPORT_FIELDS = [
         : getMonthlyFactor(s);
       return (c * factor).toFixed(2).replace('.', ',');
     } },
-  { key: 'currency',     label: 'Valuta',              getValue: (a, s) => s.currency ?? 'EUR' },
-  { key: 'is_charged',   label: 'Doorberekend?',       getValue: (a)    => a.is_charged_to_client ? 'Ja' : 'Nee' },
-  { key: 'client_name',  label: 'Klantnaam',           getValue: (a)    => a.client_name ?? '' },
-  { key: 'status',       label: 'Status',              getValue: (a)    => a.archived_at ? 'Gearchiveerd' : 'Actief' },
-  { key: 'archived_at',  label: 'Gearchiveerd op',     getValue: (a)    => a.archived_at ? formatDate(a.archived_at) : '' },
+  { key: 'currency',     label: 'Valuta',              group: 'Kosten',        getValue: (a, s) => s.currency ?? 'EUR' },
+  { key: 'is_charged',   label: 'Doorberekend?',       group: 'Doorberekening',getValue: (a)    => a.is_charged_to_client ? 'Ja' : 'Nee' },
+  { key: 'client_name',  label: 'Klantnaam',           group: 'Doorberekening',getValue: (a)    => a.client_name ?? '' },
+  { key: 'status',       label: 'Status',              group: 'Status',        getValue: (a)    => a.archived_at ? 'Gearchiveerd' : 'Actief' },
+  { key: 'archived_at',  label: 'Gearchiveerd op',     group: 'Status',        getValue: (a)    => a.archived_at ? formatDate(a.archived_at) : '' },
 ];
 
-const ACCOUNT_DEFAULT_SELECTED = new Set(['name','period','start_date','end_date','auto_renew','monthly_eur','is_charged','client_name','status']);
+const ACCOUNT_EXPORT_GROUPS = ['Identificatie', 'Cyclus', 'Kosten', 'Doorberekening', 'Status'];
+
+const ACCOUNT_RECOMMENDED = new Set(['name','period','start_date','end_date','auto_renew','monthly_eur','is_charged','client_name','status']);
 
 // Modal voor het exporteren van kentekens/accounts. Werkt voor 1 sub
 // (knop naast chevron) of meerdere subs (bulk-select in tabel).
 function AccountsExportModal({ subs, onExport, onClose }) {
-  const [selected, setSelected] = useState(new Set(ACCOUNT_DEFAULT_SELECTED));
+  // Default leeg — gebruiker kiest actief welke velden mee moeten.
+  const [selected, setSelected] = useState(new Set());
   const [includeArchived, setIncludeArchived] = useState(false);
 
   // Verzamel alle accounts uit alle subs, met parent-referentie.
@@ -170,16 +265,20 @@ function AccountsExportModal({ subs, onExport, onClose }) {
     return next;
   });
 
-  const allSelected = selected.size === ACCOUNT_EXPORT_FIELDS.length;
-  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(ACCOUNT_EXPORT_FIELDS.map(f => f.key)));
-
   const exportCount = includeArchived ? allEntries.length : liveEntries.length;
   const isMulti = subs.length > 1;
 
+  const presets = [
+    { label: 'Niets',      set: new Set(),                                              size: 0 },
+    { label: 'Aanbevolen', set: new Set(ACCOUNT_RECOMMENDED), recommended: true,       size: ACCOUNT_RECOMMENDED.size },
+    { label: 'Alles',      set: new Set(ACCOUNT_EXPORT_FIELDS.map(f => f.key)),         size: ACCOUNT_EXPORT_FIELDS.length },
+  ];
+
   return (
     <Modal onClose={onClose} size="md" ariaLabel={`${labels.sectionTitle} exporteren`}>
-      <div className="p-6 space-y-5">
-        <div>
+      <div className="flex flex-col max-h-[85vh]">
+        {/* Header */}
+        <div className="px-6 pt-6 pb-4 border-b border-slate-100">
           <h2 className="text-lg font-bold text-slate-900">{labels.sectionTitle} exporteren</h2>
           <p className="text-sm text-slate-500 mt-1">
             {isMulti ? (
@@ -200,54 +299,57 @@ function AccountsExportModal({ subs, onExport, onClose }) {
           )}
         </div>
 
-        {archivedEntries.length > 0 && (
-          <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-600">
-            <input
-              type="checkbox"
-              checked={includeArchived}
-              onChange={(e) => setIncludeArchived(e.target.checked)}
-              className="rounded border-slate-300 text-primary focus:ring-primary/30"
-            />
-            Inclusief gearchiveerde {labels.plural} ({archivedEntries.length})
-          </label>
-        )}
-
-        <div className="flex justify-between items-center">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Velden</span>
-          <button onClick={toggleAll} className="text-xs font-medium text-primary hover:underline">
-            {allSelected ? 'Deselecteer alles' : 'Selecteer alles'}
-          </button>
-        </div>
-
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-          {ACCOUNT_EXPORT_FIELDS.map(field => (
-            <label key={field.key} className="flex items-center gap-2 cursor-pointer group">
+        {/* Body — scrollable */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          {archivedEntries.length > 0 && (
+            <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-600 px-3 py-2 rounded-lg bg-slate-50 border border-slate-100 hover:bg-slate-100 transition-colors">
               <input
                 type="checkbox"
-                checked={selected.has(field.key)}
-                onChange={() => toggle(field.key)}
+                checked={includeArchived}
+                onChange={(e) => setIncludeArchived(e.target.checked)}
                 className="rounded border-slate-300 text-primary focus:ring-primary/30"
               />
-              <span className="text-sm text-slate-600 group-hover:text-slate-900 transition-colors">{field.label}</span>
+              Inclusief gearchiveerde {labels.plural} <span className="text-slate-400 tabular-nums">({archivedEntries.length})</span>
             </label>
+          )}
+
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Velden</span>
+            <PresetBar presets={presets} currentSize={selected.size} totalSize={ACCOUNT_EXPORT_FIELDS.length} onApply={setSelected} />
+          </div>
+
+          {ACCOUNT_EXPORT_GROUPS.map(group => (
+            <FieldGroup
+              key={group}
+              title={group}
+              fields={ACCOUNT_EXPORT_FIELDS.filter(f => f.group === group)}
+              selected={selected}
+              onToggle={toggle}
+            />
           ))}
         </div>
 
-        <div className="flex justify-end gap-3 pt-1">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg text-sm font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-colors"
-          >
-            Annuleren
-          </button>
-          <button
-            onClick={() => onExport(selected, includeArchived)}
-            disabled={selected.size === 0 || exportCount === 0}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white bg-primary shadow-sm hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <ArrowDownTrayIcon className="h-4 w-4" />
-            Exporteren ({selected.size})
-          </button>
+        {/* Sticky footer */}
+        <div className="px-6 py-4 border-t border-slate-100 bg-white flex items-center justify-between gap-3">
+          <span className="text-xs text-slate-500 tabular-nums">
+            {selected.size} van {ACCOUNT_EXPORT_FIELDS.length} velden geselecteerd
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-colors"
+            >
+              Annuleren
+            </button>
+            <button
+              onClick={() => onExport(selected, includeArchived)}
+              disabled={selected.size === 0 || exportCount === 0}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white bg-primary shadow-sm hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <ArrowDownTrayIcon className="h-4 w-4" />
+              Exporteren
+            </button>
+          </div>
         </div>
       </div>
     </Modal>
