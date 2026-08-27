@@ -3,9 +3,9 @@ import { useMonthlySnapshots } from '../hooks/useMonthlySnapshots';
 import { useSubscriptions } from '../hooks/useSubscriptions';
 import { useEvaluaties } from '../hooks/useEvaluaties';
 import { useSettings } from '../hooks/useSettings';
-import { format, addDays, isBefore } from 'date-fns';
+import { format, addDays, isBefore, isAfter } from 'date-fns';
 import { SubLogo } from '../components/SubLogo';
-import { toEurMonthly as calcEurMonthly, effectiveAutoRenew } from '../lib/costUtils';
+import { toEurMonthly as calcEurMonthly, effectiveAutoRenew, deriveRenewalDate } from '../lib/costUtils';
 import { SubscriptionDetailPanel } from '../components/SubscriptionDetailPanel';
 import SubscriptionModal from '../components/SubscriptionModal';
 import {
@@ -383,9 +383,15 @@ function DashboardPage() {
     .filter(s => {
       // Bij per_account: minstens één account auto-verlengt → niet 'verloopt binnenkort'
       if (effectiveAutoRenew(s)) return false;
-      return s.renewal_date && isBefore(new Date(s.renewal_date), sixtyDays);
+      const renewal = deriveRenewalDate(s);
+      if (!renewal) return false;
+      const date = new Date(renewal);
+      // Ondergrens: een datum in het verleden is niet 'binnenkort'. Zonder deze
+      // check bleven al verlopen abonnementen die nog op 'actief' staan boven-
+      // aan de lijst staan en verdrongen ze de echt urgente items.
+      return isAfter(date, now) && isBefore(date, sixtyDays);
     })
-    .sort((a, b) => new Date(a.renewal_date) - new Date(b.renewal_date));
+    .sort((a, b) => new Date(deriveRenewalDate(a)) - new Date(deriveRenewalDate(b)));
 
   const vierMaandenGeleden = new Date();
   vierMaandenGeleden.setMonth(vierMaandenGeleden.getMonth() - 4);
@@ -786,7 +792,7 @@ function DashboardPage() {
           ) : (
             <div className="space-y-1 -mx-1">
               {expiringSoonList.slice(0, 6).map(sub => {
-                const expiryDate = sub.renewal_date;
+                const expiryDate = deriveRenewalDate(sub);
                 const days = Math.ceil((new Date(expiryDate) - now) / (1000 * 60 * 60 * 24));
                 const urgent = days < 30;
                 return (
