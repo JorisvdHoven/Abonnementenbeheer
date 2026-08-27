@@ -707,7 +707,7 @@ const STATUS_ORDER = { actief: 0, verlopen: 1, opgezegd: 2 };
 // Bij 'alles' wordt secondary-sort op sub.status toegepast zodat
 // actieve subs altijd boven verlopen/opgezegde komen, ongeacht de
 // gekozen primary sort.
-function SubscriptionsTable({ rows, onView, onViewAccount, isSelectable, selected, onToggleSelect, onToggleAll, isAllesTab }) {
+function SubscriptionsTable({ rows, onView, onViewAccount, isSelectable, selected, onToggleSelect, onToggleAll, isAllesTab, exchangeRates = {} }) {
   // Default: geen sortering — rij-volgorde uit DB / filter behouden.
   // Bij klik op kolom-header: kosten gaat default naar desc (hoog→laag),
   // andere kolommen naar asc (logische default).
@@ -730,7 +730,10 @@ function SubscriptionsTable({ rows, onView, onViewAccount, isSelectable, selecte
   };
 
   const getSortVal = (sub, key) => {
-    if (key === 'cost') return (sub.cost || 0) * getMonthlyFactor(sub);
+    // Sorteer op hetzelfde bedrag dat de Kosten-kolom toont: account-aware
+    // (somt kentekens/accounts) en inclusief base_cost en seats. Genormaliseerd
+    // naar EUR zodat rijen in verschillende valuta onderling vergelijkbaar zijn.
+    if (key === 'cost') return toEurMonthly(sub, exchangeRates);
     if (key === 'renewal_date') return deriveRenewalDate(sub) || null;
     if (key === 'status') return statusRank(sub);
     return sub[key] ?? null;
@@ -1208,6 +1211,7 @@ function SubscriptionsPage() {
             onToggleSelect={toggleSelect}
             onToggleAll={toggleSelectMany}
             isAllesTab={statusTab === 'alles'}
+            exchangeRates={exchangeRates}
           />
 
           {/* Archief — collapsable, blijft onderaan */}
