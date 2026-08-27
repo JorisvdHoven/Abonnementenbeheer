@@ -3,6 +3,11 @@ import { supabase } from '../lib/supabaseClient';
 import { backfillSubscriptionSnapshots, removeSubscriptionFromSnapshots } from '../lib/snapshotUtils';
 import { toast } from '../lib/toast';
 
+// Elke query die een sub in de state zet moet de accounts meenemen: costUtils
+// (getBillingModel, toEurMonthly, effectiveAutoRenew) beslist op sub.accounts.
+// Zonder die array valt een parking-/per-account-abo terug op het flat-model.
+const SUB_SELECT = '*, accounts:subscription_accounts(*)';
+
 export function useSubscriptions() {
   const [subscriptions, setSubscriptions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -14,7 +19,7 @@ export function useSubscriptions() {
   const fetchSubscriptions = async () => {
     const { data, error } = await supabase
       .from('subscriptions')
-      .select('*, accounts:subscription_accounts(*)')
+      .select(SUB_SELECT)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -30,7 +35,7 @@ export function useSubscriptions() {
     const { data, error } = await supabase
       .from('subscriptions')
       .insert([subscription])
-      .select();
+      .select(SUB_SELECT);
 
     if (error) {
       console.error('Error adding subscription:', error);
@@ -53,7 +58,7 @@ export function useSubscriptions() {
       .from('subscriptions')
       .update(updates)
       .eq('id', id)
-      .select();
+      .select(SUB_SELECT);
 
     if (error) {
       console.error('Error updating subscription:', error);
@@ -79,7 +84,7 @@ export function useSubscriptions() {
       .from('subscriptions')
       .update({ archived_at: archivedAt })
       .eq('id', id)
-      .select();
+      .select(SUB_SELECT);
 
     if (error) {
       console.error('Error archiving subscription:', error);
@@ -98,7 +103,7 @@ export function useSubscriptions() {
       .from('subscriptions')
       .update({ archived_at: null })
       .eq('id', id)
-      .select();
+      .select(SUB_SELECT);
 
     if (error) {
       console.error('Error restoring subscription:', error);
