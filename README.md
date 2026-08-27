@@ -14,7 +14,11 @@ Met deze app kun je:
 ## 🚀 Hoe begin je? Stap-voor-stap handleiding
 
 ### Stap 1: Het project downloaden
-Als je deze code hebt gekregen via een zip-bestand of repository, pak het uit op je computer. Zorg dat je in de juiste map bent (de map met `package.json` erin).
+De code staat op GitHub in [Flexuritybv/Abonnementenbeheer](https://github.com/Flexuritybv/Abonnementenbeheer). Haal hem binnen met:
+```bash
+git clone https://github.com/Flexuritybv/Abonnementenbeheer.git
+```
+Zorg daarna dat je in de projectmap bent (de map met `package.json` erin).
 
 ### Stap 2: Benodigde software installeren
 Je hebt Node.js nodig. Ga naar [nodejs.org](https://nodejs.org) en download de LTS versie. Installeer het zoals een normaal programma.
@@ -23,7 +27,7 @@ Open een terminal (Command Prompt op Windows, Terminal op Mac) en ga naar de pro
 
 **Voorbeeld commando (pas het pad aan naar je eigen map):**
 ```bash
-cd "X:\Edwin\Ai Projecten\Abonnementenbeheer\Applicatiemap Abo beheer"
+cd Abonnementenbeheer
 ```
 
 **Belangrijk:** Kopieer alleen de tekst tussen de ``` tekens, niet de ``` tekens zelf!
@@ -69,9 +73,7 @@ In Supabase:
 3. Kopieer de "anon public" key (een lange reeks letters en cijfers)
 
 ### Stap 7: Environment variabelen instellen
-Open het bestand `.env.local` in een teksteditor (bijv. Notepad of VS Code).
-
-Vervang de placeholders:
+Maak in de projectmap een bestand `.env.local` aan met deze twee regels:
 ```
 VITE_SUPABASE_URL=https://jouw-project.supabase.co
 VITE_SUPABASE_ANON_KEY=jouw-anon-key
@@ -79,7 +81,7 @@ VITE_SUPABASE_ANON_KEY=jouw-anon-key
 
 Plak hier de URL en key die je net gekopieerd hebt.
 
-**Belangrijk:** Deel dit bestand nooit met anderen! Het bevat geheime informatie.
+**Belangrijk:** Deel dit bestand nooit met anderen en commit het niet! Het bevat geheime informatie. Dit bestand geldt alleen voor je eigen computer — de online versie haalt deze waarden uit Vercel (zie [Voor productie](#-voor-productie)).
 
 ### Stap 8: De app starten
 Typ in de terminal:
@@ -177,11 +179,14 @@ Gebruikersinformatie:
 
 ## 🚀 Voor productie
 
-Als je de app online wilt zetten:
-1. Typ `npm run build` om een productie versie te maken
-2. Upload de `dist` map naar een webhoster (bijv. Vercel, Netlify)
-3. Stel de environment variabelen in op de hoster
-4. Configureer Supabase voor productie gebruik
+De app draait op Vercel, onder het team **flexurity's projects** (project `abonnementenbeheer`). Je hoeft niets handmatig te uploaden: elke push naar de `main`-branch wordt automatisch gebouwd en live gezet.
+
+- Live: https://abonnementenbeheer.vercel.app
+- Environment variabelen staan in Vercel onder *Settings → Environment Variables* (`VITE_SUPABASE_URL` en `VITE_SUPABASE_ANON_KEY`)
+
+**Let op:** Vite bakt deze variabelen in tijdens het bouwen. Als je een variabele wijzigt, moet je opnieuw deployen — een bestaande build pikt de nieuwe waarde niet vanzelf op.
+
+Wil je lokaal een productieversie testen, dan kan dat met `npm run build`.
 
 ## 📞 Hulp nodig?
 
