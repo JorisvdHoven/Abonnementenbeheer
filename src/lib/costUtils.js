@@ -202,7 +202,7 @@ function effectiveAccountCost(account, parentCost) {
 // Per-account factor: gebruikt account.cost_period als die gezet is, anders parent.
 // Voor 'Anders' op account-niveau: cycluslengte = (account.end_date - account.start_date)
 // in dagen, fallback op (parent.renewal_date - parent.start_date).
-function accountMonthlyFactor(account, parentSub) {
+export function accountMonthlyFactor(account, parentSub) {
   const period = account.cost_period || parentSub.cost_period;
   if (!period) return 1;
   if (period === 'Anders') {

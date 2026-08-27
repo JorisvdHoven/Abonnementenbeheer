@@ -1,25 +1,9 @@
-// Factor formule: monthly = cost × (365/12) / dagen_in_periode
-// 'Anders' wordt dynamisch berekend uit start→renewal in factorForSub().
-const BILLING_FACTORS = {
-  'Maandelijks':   1,
-  'Wekelijks':     (365 / 12) / 7,
-  'Per kwartaal':  1 / 3,
-  'Halfjaarlijks': 1 / 6,
-  'Jaarlijks':     1 / 12,
-  'Eenmalig':      0,
-};
-
-function factorForSub(sub) {
-  if (sub.cost_period === 'Anders') {
-    if (!sub.start_date || !sub.renewal_date) return 0;
-    const start = new Date(sub.start_date);
-    const renewal = new Date(sub.renewal_date);
-    const days = (renewal - start) / (1000 * 60 * 60 * 24);
-    if (days <= 0) return 0;
-    return (365 / 12) / days;
-  }
-  return BILLING_FACTORS[sub.cost_period] ?? 1;
-}
+// Factoren komen uit costUtils, zodat de snapshots met exact dezelfde tabel
+// rekenen als het live-totaal in de UI. Er stond hier een eigen kopie die op
+// één punt afweek: bij een 'Anders'-periode zonder bruikbare datums gaf deze
+// 0 terug en costUtils 1, waardoor hetzelfde abonnement wel meetelde in het
+// live-totaal en niet in de snapshot.
+import { getMonthlyFactor, accountMonthlyFactor } from './costUtils';
 
 // Is een account actief tussen first en last dag van een maand?
 function isAccountActiveInRange(account, firstDay, lastDay) {
@@ -75,25 +59,12 @@ export async function backfillSubscriptionSnapshots(supabase, sub) {
     fxRate = rateRow?.rate ? parseFloat(rateRow.rate) : 1.0;
   }
 
-  const parentFactor = factorForSub(sub);
+  const parentFactor = getMonthlyFactor(sub);
   const parentCost = parseFloat(sub.cost) || 0;
   const baseCost = parseFloat(sub.base_cost) || 0;
 
   // Per-account factor — gebruikt account.cost_period als gezet, anders parent.
-  // 'Anders' op account-niveau: cycluslengte uit (account.end - account.start),
-  // fallback op parent (renewal - start).
-  const factorForAccount = (account) => {
-    const period = account.cost_period || sub.cost_period;
-    if (period === 'Anders') {
-      const start = account.start_date || sub.start_date;
-      const end = account.end_date || sub.renewal_date;
-      if (!start || !end) return 0;
-      const days = (new Date(end) - new Date(start)) / (1000 * 60 * 60 * 24);
-      if (days <= 0) return 0;
-      return (365 / 12) / days;
-    }
-    return BILLING_FACTORS[period] ?? 1;
-  };
+  const factorForAccount = (account) => accountMonthlyFactor(account, sub);
 
   const computeMonthlyNative = (year, month) => {
     if (hasAccounts) {

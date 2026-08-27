@@ -1011,7 +1011,10 @@ function SubscriptionsPage() {
     const q = debouncedSearch.toLowerCase();
     const matchSearch = sub.name.toLowerCase().includes(q) ||
       (sub.vendor?.toLowerCase().includes(q)) ||
-      (sub.contact_name?.toLowerCase().includes(q));
+      (sub.contact_name?.toLowerCase().includes(q)) ||
+      // De placeholder belooft zoeken op medewerker; bij per_account en parking
+      // staan die namen (en kentekens) in de accounts, niet op de parent.
+      (sub.accounts?.some(a => a.owner_name?.toLowerCase().includes(q)) ?? false);
     return matchSearch
       && (categoryFilter.size === 0 || categoryFilter.has(sub.category))
       && (billingModelFilter.size === 0 || billingModelFilter.has(getBillingModel(sub)))
