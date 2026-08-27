@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { BILLING_PERIODS, toMonthly, getMonthlyFactor, activeAccountsNow, getEntityLabels } from '../lib/costUtils';
+import { BILLING_PERIODS, getMonthlyFactor, activeAccountsNow, accountsMonthlyNative, getEntityLabels } from '../lib/costUtils';
 import { currencySymbol, formatDate } from '../lib/format';
 import { ChevronDownIcon, PlusIcon, TrashIcon, InformationCircleIcon, ArrowUturnLeftIcon } from '@heroicons/react/24/outline';
 import { SubLogo } from './SubLogo';
@@ -314,12 +314,16 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period, pa
   const archivedAccounts = accounts.filter(a => a.archived_at);
 
   const sym = currencySymbol(currency);
-  const totalMonthly = activeAccounts.reduce((sum, a) => {
-    const cost = a.cost !== '' && a.cost !== null && a.cost !== undefined
-      ? parseFloat(a.cost) || 0
-      : parseFloat(defaultCost) || 0;
-    return sum + toMonthly(cost, period);
-  }, 0);
+  // Elk account rekent met zijn eigen cost_period wanneer die gezet is; de
+  // parent-periode is alleen de fallback. Eerder werd hier toMonthly(cost,
+  // period) met de parent-periode gebruikt, wat een jaarlijks kenteken onder
+  // een maandelijks abonnement een factor 12 te hoog liet meetellen.
+  const totalMonthly = accountsMonthlyNative(activeAccounts, {
+    cost: defaultCost,
+    cost_period: period,
+    start_date: parentStartDate,
+    renewal_date: parentRenewalDate,
+  });
 
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50/50 overflow-hidden">
@@ -963,14 +967,16 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
       // Gebruik dezelfde 'NU actief' definitie als de rest van de app
       // (countActiveAccountsNow, DetailPanel) — zodat preview matcht met
       // wat er in de lijst getoond wordt. Filtert ook archived_at uit.
+      // Elk account krijgt zijn eigen periode-factor, dus hier meteen naar
+      // maandbedrag: één keer de parent-factor over de som zou bij een
+      // afwijkende accountperiode een factor 12 mis zitten.
       const activeAccounts = activeAccountsNow(accounts);
-      variablePerPeriod = activeAccounts.reduce((sum, a) => {
-        const c = a.cost !== '' && a.cost !== null && a.cost !== undefined
-          ? parseFloat(a.cost) || 0
-          : cost;
-        return sum + c;
-      }, 0);
-    } else if (showSeats) {
+      const monthly = baseFee * getMonthlyFactor(formData)
+        + accountsMonthlyNative(activeAccounts, formData);
+      return monthly === 0 ? null : monthly;
+    }
+
+    if (showSeats) {
       const seats = parseInt(formData.seats) || 1;
       variablePerPeriod = cost * seats;
     } else {

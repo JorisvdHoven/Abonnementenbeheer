@@ -14,7 +14,7 @@ function periodLabel(period) {
     default:              return null;
   }
 }
-import { toMonthly, getMonthlyFactor, deriveRenewalDate, countActiveAccountsNow, activeAccountsNow, getBillingModel, BILLING_MODEL_LABELS, getEntityLabels } from '../lib/costUtils';
+import { toMonthly, getMonthlyFactor, deriveRenewalDate, countActiveAccountsNow, activeAccountsNow, accountsMonthlyNative, getBillingModel, BILLING_MODEL_LABELS, getEntityLabels } from '../lib/costUtils';
 import { formatDate, formatDateLong, currencySymbol } from '../lib/format';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useLatestAuditFor } from '../hooks/useAuditLog';
@@ -179,8 +179,13 @@ export function SubscriptionDetailPanel({ sub, onClose, onEdit, onDelete, onView
   }
 
   const perPeriodTotal = baseCost + variablePerPeriod;
+  // Bij accounts krijgt elk account zijn eigen periode-factor; één keer de
+  // parent-factor over de som toepassen gaf een factor 12 verschil met de
+  // Kosten-kolom in de tabel zodra een kenteken een afwijkende periode had.
   const monthly = sub.cost_period && sub.cost_period !== 'Eenmalig'
-    ? perPeriodTotal * getMonthlyFactor(sub)
+    ? (hasAccounts
+        ? baseCost * getMonthlyFactor(sub) + accountsMonthlyNative(activeAccountsNow(liveAccounts), sub)
+        : perPeriodTotal * getMonthlyFactor(sub))
     : null;
 
   const sym = currencySymbol(sub.currency);

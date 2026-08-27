@@ -217,6 +217,20 @@ function accountMonthlyFactor(account, parentSub) {
   return match?.factor ?? 1;
 }
 
+// Maandbedrag van een set accounts in source currency. Elk account krijgt zijn
+// EIGEN factor via accountMonthlyFactor: een account mag een afwijkende
+// cost_period hebben. Dit mag dus niet vereenvoudigd worden tot één keer de
+// parent-factor over de som — dat scheelt bij afwijkende periodes een factor 12.
+// parentSub hoeft geen volledig sub te zijn: cost, cost_period, start_date en
+// renewal_date volstaan (de modal geeft hier formData of een parent-achtig
+// object mee).
+export function accountsMonthlyNative(accounts, parentSub) {
+  return (accounts || []).reduce((sum, a) => {
+    const c = effectiveAccountCost(a, parentSub.cost);
+    return sum + c * accountMonthlyFactor(a, parentSub);
+  }, 0);
+}
+
 // Bereken maandkosten in source currency (zonder fx). Bij accounts: per-account
 // factor toepassen op per-account cost. Plus base_cost × parent factor. Zonder
 // accounts: (cost × seats + base) × parent factor.
@@ -225,11 +239,7 @@ function monthlyNative(sub, accountsForMonth) {
   const parentFactor = getMonthlyFactor(sub);
 
   if (sub.accounts && sub.accounts.length > 0) {
-    const accountsTotal = accountsForMonth.reduce((sum, a) => {
-      const c = effectiveAccountCost(a, sub.cost);
-      return sum + c * accountMonthlyFactor(a, sub);
-    }, 0);
-    return base * parentFactor + accountsTotal;
+    return base * parentFactor + accountsMonthlyNative(accountsForMonth, sub);
   }
 
   const seatMultiplier = sub.cost_per_seat ? (sub.seats || 1) : 1;
