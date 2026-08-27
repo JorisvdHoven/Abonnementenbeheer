@@ -1,8 +1,8 @@
 // Factoren komen uit costUtils, zodat de snapshots met exact dezelfde tabel
 // rekenen als het live-totaal in de UI. Er stond hier een eigen kopie die op
 // één punt afweek: bij een 'Anders'-periode zonder bruikbare datums gaf deze
-// 0 terug en costUtils 1, waardoor hetzelfde abonnement wel meetelde in het
-// live-totaal en niet in de snapshot.
+// 0 terug en costUtils 1. Beide staan nu op 0, gelijk aan _period_factor() in
+// de database — die is de bron van waarheid voor de maandelijkse snapshots.
 import { getMonthlyFactor, accountMonthlyFactor } from './costUtils';
 
 // Is een account actief tussen first en last dag van een maand?

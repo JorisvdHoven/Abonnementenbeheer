@@ -44,11 +44,16 @@ export function deriveRenewalDate(sub) {
 export function getMonthlyFactor(sub) {
   if (!sub?.cost_period) return 1;
   if (sub.cost_period === 'Anders') {
-    if (!sub.start_date || !sub.renewal_date) return 1;
+    // Zonder bruikbare start- en vervaldatum valt er geen cycluslengte af te
+    // leiden. Dan 0, gelijk aan public._period_factor() in de database, die de
+    // maandelijkse snapshots berekent. Eerder gaf deze functie 1 terug, wat
+    // neerkomt op 'het hele bedrag is maandelijks' — een verzonnen waarde die
+    // het totaal opblies en niet strookte met de snapshot.
+    if (!sub.start_date || !sub.renewal_date) return 0;
     const start = new Date(sub.start_date);
     const renewal = new Date(sub.renewal_date);
     const days = (renewal - start) / (1000 * 60 * 60 * 24);
-    if (days <= 0) return 1;
+    if (days <= 0) return 0;
     return (365 / 12) / days;
   }
   const match = BILLING_PERIODS.find(p => p.value === sub.cost_period);
