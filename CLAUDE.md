@@ -24,6 +24,23 @@ branch — dus checkout `beta` eerst.
 
 Push altijd naar zowel `origin` als `personal`.
 
+## Git-identiteit (belangrijk voor deploys)
+
+Commit altijd met een account dat lid is van het Vercel-team *flexurity's projects*:
+
+```bash
+git config user.name "JorisvdHoven"
+git config user.email "stage@flexurity.nl"
+```
+
+Vercel weigert deployments van commits waarvan de GitHub-auteur geen teamlid is:
+de deployment krijgt status `BLOCKED` en er verschijnt nooit een build. De push
+naar GitHub slaagt gewoon, dus je merkt het alleen aan het uitblijven van een
+nieuwe versie. Dit is eerder gebeurd met de accounts `Joris-vdh` (oud persoonlijk
+account) en `EdwinvanAlmkerk`.
+
+Controleer bij twijfel met `git log -1 --format='%an <%ae>'` vóórdat je pusht.
+
 ## Stack
 
 - React + Vite + Tailwind
