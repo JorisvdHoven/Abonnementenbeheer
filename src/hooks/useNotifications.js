@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { addDays, isBefore, isAfter } from 'date-fns';
+import { effectiveAutoRenew } from '../lib/costUtils';
 
 const STORAGE_KEY = 'dismissed_notifications';
 
@@ -17,7 +18,8 @@ export function useNotifications() {
   const fetchNotifications = async () => {
     const { data, error } = await supabase
       .from('subscriptions')
-      .select('*')
+      .select('*, accounts:subscription_accounts(*)')
+      .is('archived_at', null)
       .in('status', ['actief', 'verlopen']);
 
     if (error) { console.error('Error fetching subscriptions for notifications:', error); return; }
@@ -35,9 +37,12 @@ export function useNotifications() {
     };
 
     const actief = data.filter(s => s.status === 'actief');
-    const urgent = actief.filter(sub => !sub.auto_renew && isExpiringSoon(sub, null, thirtyDays));
-    const soon = actief.filter(sub => !sub.auto_renew && isExpiringSoon(sub, thirtyDays, sixtyDays));
-    const future = actief.filter(sub => !sub.auto_renew && isExpiringSoon(sub, sixtyDays, ninetyDays));
+    // effectiveAutoRenew i.p.v. sub.auto_renew: bij per_account/parking staat
+    // parent.auto_renew altijd op false (geforceerd in dataToSave), dus elk
+    // parking-abo stond permanent in de bel als 'verloopt binnenkort'.
+    const urgent = actief.filter(sub => !effectiveAutoRenew(sub) && isExpiringSoon(sub, null, thirtyDays));
+    const soon = actief.filter(sub => !effectiveAutoRenew(sub) && isExpiringSoon(sub, thirtyDays, sixtyDays));
+    const future = actief.filter(sub => !effectiveAutoRenew(sub) && isExpiringSoon(sub, sixtyDays, ninetyDays));
 
     const recentlyExpired = data.filter(sub => {
       if (sub.status !== 'verlopen') return false;
