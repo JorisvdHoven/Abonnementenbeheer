@@ -1068,8 +1068,8 @@ function SubscriptionsPage() {
       return result;
     }
     setModalOpen(false);
-    // Refetch zodat de net opgeslagen accounts ook meekomen in de UI
-    setTimeout(() => refetch(), 100);
+    // Geen refetch hier: de kentekens en snapshots worden pas na deze aanroep
+    // weggeschreven. De modal meldt via onSaved wanneer dat klaar is.
     return result;
   };
 
@@ -1280,6 +1280,7 @@ function SubscriptionsPage() {
           onAddType={addType}
           onAddDepartment={addDepartment}
           onSave={handleSave}
+          onSaved={refetch}
           onClose={() => { setModalOpen(false); setSaveError(null); }}
           saveError={saveError}
         />

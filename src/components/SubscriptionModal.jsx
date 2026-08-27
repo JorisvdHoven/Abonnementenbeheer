@@ -602,7 +602,10 @@ function AccountsManager({ accounts, onChange, defaultCost, currency, period, pa
 // Hoofd-component
 // ============================================================
 
-function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [], departmentOptions = [], onAddCategory, onAddType, onAddDepartment, onSave, onClose, saveError }) {
+// onSave slaat alleen de parent-rij op. De kentekens en snapshots worden pas
+// daarna weggeschreven, dus de aanroeper mag pas herladen wanneer onSaved
+// vuurt — anders ziet hij een abonnement zonder zijn kentekens.
+function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [], departmentOptions = [], onAddCategory, onAddType, onAddDepartment, onSave, onSaved, onClose, saveError }) {
   const [formData, setFormData] = useState({
     name: '', vendor: '', account_owner: '',
     contact_name: '', contact_email: '', contact_phone: '',
@@ -956,6 +959,10 @@ function SubscriptionModal({ subscription, categoryOptions = [], typeOptions = [
         toast.error(`Abonnement opgeslagen, maar accounts niet volledig gesynct: ${err.message}. Open het abonnement opnieuw en controleer.`);
       }
     }
+
+    // Pas hier is alles weggeschreven. Ook na een mislukte account-sync, zodat
+    // de aanroeper de werkelijke stand ophaalt in plaats van de optimistische.
+    onSaved?.();
   };
 
   const monthlyPreview = (() => {

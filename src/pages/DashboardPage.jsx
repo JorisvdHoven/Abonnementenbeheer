@@ -363,7 +363,8 @@ function DashboardPage() {
       return result;
     }
     setModalOpen(false);
-    setTimeout(() => refetch(), 100);
+    // Geen refetch hier: de kentekens en snapshots worden pas na deze aanroep
+    // weggeschreven. De modal meldt via onSaved wanneer dat klaar is.
     return result;
   };
 
@@ -880,6 +881,7 @@ function DashboardPage() {
           onAddType={addType}
           onAddDepartment={addDepartment}
           onSave={handleSave}
+          onSaved={refetch}
           onClose={() => { setSaveError(null); setModalOpen(false); }}
           saveError={saveError}
         />
