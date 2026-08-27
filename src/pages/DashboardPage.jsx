@@ -336,6 +336,7 @@ function DashboardPage() {
   const [detailSub, setDetailSub] = useState(null);
   const [editingSub, setEditingSub] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [saveError, setSaveError] = useState(null);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [windowStart, setWindowStart] = useState(new Date().getFullYear() - 1);
   const [categoryPeriod, setCategoryPeriod] = useState('maand');
@@ -346,13 +347,21 @@ function DashboardPage() {
 
   const handleEdit = (sub) => { setDetailSub(null); setEditingSub(sub); setModalOpen(true); };
   const handleDelete = async (id) => {
-    if (confirm('Weet je zeker dat je dit abonnement wilt verwijderen?')) {
+    if (confirm('Dit abonnement naar het archief verplaatsen? Je kunt het later herstellen.')) {
       await deleteSubscription(id);
       setDetailSub(null);
     }
   };
   const handleSave = async (subData) => {
+    setSaveError(null);
     const result = await updateSubscription(editingSub.id, subData);
+    // Modal openhouden bij een fout: anders sluit hij alsof het gelukt is,
+    // zet de refetch de oude waarden terug en denkt de gebruiker dat het
+    // opgeslagen is. Zelfde patroon als SubscriptionsPage.handleSave.
+    if (result?.error) {
+      setSaveError(`Opslaan mislukt: ${result.error.message}`);
+      return result;
+    }
     setModalOpen(false);
     setTimeout(() => refetch(), 100);
     return result;
@@ -859,7 +868,8 @@ function DashboardPage() {
           onAddType={addType}
           onAddDepartment={addDepartment}
           onSave={handleSave}
-          onClose={() => setModalOpen(false)}
+          onClose={() => { setSaveError(null); setModalOpen(false); }}
+          saveError={saveError}
         />
       )}
     </div>
