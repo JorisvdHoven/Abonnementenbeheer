@@ -17,18 +17,9 @@ function LoginPage() {
     setForgotLoading(true);
     setForgotStatus(null);
 
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('email', forgotEmail)
-      .single();
-
-    if (!profiles) {
-      setForgotStatus('not_found');
-      setForgotLoading(false);
-      return;
-    }
-
+    // Bewust GEEN voorafgaande check of het e-mailadres bestaat: dat maakte
+    // van deze publieke pagina een gebruikersenumeratie-tool. De melding
+    // hieronder is daarom altijd hetzelfde, of het adres nu bestaat of niet.
     await supabase.auth.resetPasswordForEmail(forgotEmail, {
       redirectTo: window.location.origin,
     });
@@ -129,10 +120,7 @@ function LoginPage() {
                 className="w-full rounded-2xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary"
               />
               {forgotStatus === 'sent' && (
-                <p className="text-sm text-green-400 text-center">Resetlink verstuurd! Check je e-mail.</p>
-              )}
-              {forgotStatus === 'not_found' && (
-                <p className="text-sm text-red-400 text-center">Dit e-mailadres staat niet in het systeem. Vraag een beheerder om een account aan te maken.</p>
+                <p className="text-sm text-green-400 text-center">Als dit e-mailadres bij ons bekend is, is er een resetlink verstuurd. Check je e-mail.</p>
               )}
               <div className="flex gap-3 pt-1">
                 <button
