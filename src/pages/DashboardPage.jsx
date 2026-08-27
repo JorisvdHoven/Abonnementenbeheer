@@ -371,6 +371,18 @@ function DashboardPage() {
 
   const isActiveInMonth = (sub, year, month) => {
     const monthStart = new Date(year, month, 1);
+    // Nog niet begonnen? Dan telt het abonnement in deze maand niet mee.
+    // Zelfde definitie als backfillSubscriptionSnapshots in snapshotUtils: de
+    // maand waarin het abonnement start telt volledig mee, zonder pro rata,
+    // zodat de forecast-helft van de grafiek aansluit op de snapshot-helft.
+    if (sub.start_date) {
+      const start = new Date(sub.start_date);
+      if (!isNaN(start.getTime())) {
+        const startsLater = start.getFullYear() > year
+          || (start.getFullYear() === year && start.getMonth() > month);
+        if (startsLater) return false;
+      }
+    }
     // Zonder auto-verlenging stopt het abonnement op de vervaldatum.
     // Bij per_account: kijk naar effectieve auto-renew (= minstens één account verlengt).
     if (!effectiveAutoRenew(sub) && sub.renewal_date && new Date(sub.renewal_date) < monthStart) return false;
